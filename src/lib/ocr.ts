@@ -141,14 +141,14 @@ async function ocrInBrowser(
 }
 
 function tesseractWords(data: {
-  words?: Array<{ text?: string; bbox?: { x0: number; y0: number; x1: number; y1: number } }>;
+  words?: Array<{ text?: string; bbox?: { x0: number; y0: number; x1: number; y1: number } }> | null;
   blocks?: Array<{
     paragraphs?: Array<{
       lines?: Array<{
-        words?: Array<{ text?: string; bbox?: { x0: number; y0: number; x1: number; y1: number } }>;
-      }>;
-    }>;
-  }>;
+        words?: Array<{ text?: string; bbox?: { x0: number; y0: number; x1: number; y1: number } }> | null;
+      }> | null;
+    }> | null;
+  }> | null;
 }): OcrWord[] {
   const mapped = (data.words ?? [])
     .filter((word) => word.text && word.bbox)
