@@ -163,6 +163,10 @@ function isSeccionLabel(line: string): boolean {
   return /^SECC(?:ION|I0N|JON)/.test(value) && value.length <= 16;
 }
 
+function sameName(a: string, b: string): boolean {
+  return Boolean(a) && Boolean(b) && fold(a) === fold(b);
+}
+
 function collectNameBlock(
   lines: string[],
   start: number,
@@ -177,22 +181,32 @@ function collectNameBlock(
       continue;
     }
     if (nameWords(lines[j]).length === 0) continue;
-    block.push(lines[j]);
+    const cleaned = block.length < 2 ? cleanSurname(lines[j]) : cleanGivenName(lines[j]);
+    if (!cleaned) continue;
+    if (block.some((item) => sameName(item, cleaned))) continue;
+    block.push(cleaned);
   }
 
-  const firstLineSurnames = block[0] ? surnamesOnLine(block[0]) : [];
-  if (firstLineSurnames.length >= 2) {
+  if (block.length === 1) {
+    const parts = surnamesOnLine(block[0]);
+    if (parts.length >= 3) {
+      return {
+        apellidoPaterno: parts[0] ?? "",
+        apellidoMaterno: parts[1] ?? "",
+        nombre: parts.slice(2).join(" "),
+      };
+    }
     return {
-      apellidoPaterno: firstLineSurnames[0] ?? "",
-      apellidoMaterno: firstLineSurnames[1] ?? "",
-      nombre: block[1] ? cleanGivenName(block[1]) : block[2] ? cleanGivenName(block[2]) : "",
+      apellidoPaterno: block[0] ?? "",
+      apellidoMaterno: "",
+      nombre: "",
     };
   }
 
   return {
-    apellidoPaterno: block[0] ? cleanSurname(block[0]) : "",
-    apellidoMaterno: block[1] ? cleanSurname(block[1]) : "",
-    nombre: block[2] ? cleanGivenName(block[2]) : "",
+    apellidoPaterno: block[0] ?? "",
+    apellidoMaterno: block[1] ?? "",
+    nombre: block[2] ?? "",
   };
 }
 
@@ -205,10 +219,14 @@ function scoreNames(
     if (junk.has(fold(item))) return -3;
     return item.length >= 4 ? 2 : 1;
   };
+  const nombreOk =
+    Boolean(value.nombre) &&
+    !sameName(value.nombre, value.apellidoPaterno) &&
+    !sameName(value.nombre, value.apellidoMaterno);
   return (
     surnameScore(value.apellidoPaterno) +
     surnameScore(value.apellidoMaterno) +
-    Number(Boolean(value.nombre)) * 3
+    (nombreOk ? 3 : value.nombre ? -2 : 0)
   );
 }
 
@@ -276,6 +294,11 @@ function maternoFitsCurp(apellidoMaterno: string, curp: string): boolean {
   return firstSurnameLetter(apellidoMaterno) === curp[2];
 }
 
+function nombreFitsCurp(nombre: string, curp: string): boolean {
+  if (!nombre || curp.length < 4) return false;
+  return firstSurnameLetter(nombre) === curp[3];
+}
+
 function blockAfter(rawText: string, marker: string): string {
   return (rawText.split(marker)[1] ?? "").split("===")[0];
 }
@@ -285,7 +308,8 @@ function extractCurp(
   lines: string[],
   apellidoPaterno: string,
 ): string {
-  const reads = numberedBlocks(rawText, "CURP", 5).flatMap((block) =>
+  const blocks = [...numberedBlocks(rawText, "CURP", 5), rawText];
+  const reads = blocks.flatMap((block) =>
     extractAllValidCurps(block, apellidoPaterno),
   );
 
@@ -296,11 +320,20 @@ function extractCurp(
     reads.push(...extractAllValidCurps(nearby, apellidoPaterno));
   }
 
-  reads.push(
-    ...extractAllValidCurps(rawText.split("===NOMBRES===")[0] ?? rawText, apellidoPaterno),
-  );
+  let curp = confirmCurpReads(reads, apellidoPaterno);
+  if (curp) return curp;
 
-  return confirmCurpReads(reads, apellidoPaterno);
+  const firstLetter = apellidoPaterno.trim().slice(0, 1);
+  if (firstLetter) {
+    const loose = blocks.flatMap((block) => extractAllValidCurps(block, firstLetter));
+    curp = confirmCurpReads(loose, firstLetter);
+    if (curp && curp[0] === firstLetter.toUpperCase()) return curp;
+  }
+
+  return confirmCurpReads(
+    blocks.flatMap((block) => extractAllValidCurps(block, "")),
+    apellidoPaterno,
+  );
 }
 
 const SECCION_LABEL = /S[E3]CC(?:ION|I0N|JON|10N|1ON)/;
@@ -462,6 +495,20 @@ export function parseIneText(rawText: string): IneFields {
   if (curp && !maternoFitsCurp(names.apellidoMaterno, curp)) {
     const matching = nameReads.find((item) => maternoFitsCurp(item.apellidoMaterno, curp));
     if (matching?.apellidoMaterno) names.apellidoMaterno = matching.apellidoMaterno;
+  }
+  if (
+    sameName(names.nombre, names.apellidoPaterno) ||
+    sameName(names.nombre, names.apellidoMaterno) ||
+    (curp && names.nombre && !nombreFitsCurp(names.nombre, curp))
+  ) {
+    const matching = nameReads.find(
+      (item) =>
+        item.nombre &&
+        !sameName(item.nombre, names.apellidoPaterno) &&
+        !sameName(item.nombre, names.apellidoMaterno) &&
+        (!curp || nombreFitsCurp(item.nombre, curp)),
+    );
+    names.nombre = matching?.nombre ?? "";
   }
   return {
     ...EMPTY_INE_FIELDS,

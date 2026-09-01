@@ -71,7 +71,7 @@ const LETTER_OCR: Record<string, string[]> = {
 };
 
 function looksLikeCurp(value: string): boolean {
-  return CURP_REGEX.test(value) || /^[A-Z]{4}\d{6}[HMX][A-Z0-9]{7,8}$/.test(value);
+  return value.length === 18 && (CURP_REGEX.test(value) || /^[A-Z]{4}\d{6}[HMX][A-Z0-9]{7}$/.test(value));
 }
 
 export function prefixesFromPaterno(apellidoPaterno: string): string[] {
@@ -83,12 +83,16 @@ export function prefixesFromPaterno(apellidoPaterno: string): string[] {
     .split(/[^A-Z]+/)
     .filter((word) => word && !SURNAME_PARTICLES.has(word));
   const letters = (words[0] ?? "").replace(/[^A-Z]/g, "");
-  if (letters.length < 2) return letters ? [letters] : [];
+  if (!letters) return [];
+  if (letters.length === 1) return [letters[0]];
 
   const twoLetters = letters.slice(0, 2);
   const firstVowel = letters.slice(1).match(/[AEIOU]/)?.[0] ?? "X";
   const official = `${letters[0]}${firstVowel}`;
-  return official === twoLetters ? [twoLetters] : [twoLetters, official];
+  const prefixes = [twoLetters];
+  if (official !== twoLetters) prefixes.push(official);
+  prefixes.push(letters[0]);
+  return prefixes;
 }
 
 function prefixMatches(got: string, expected: string): boolean {
@@ -212,13 +216,18 @@ export function extractAllValidCurps(raw: string, apellidoPaterno = ""): string[
   const found = new Set<string>();
 
   const labeled = raw.toUpperCase().match(/CURP[\s:.-]*([A-Z0-9][A-Z0-9\s]{15,40})/);
-  const texts = [labeled?.[1] ? compactAlnum(labeled[1]) : "", compact].filter(Boolean);
+  const glued = raw.toUpperCase().match(/CURP[\s:.-]*([A-Z0-9]{18})/);
+  const texts = [
+    labeled?.[1] ? compactAlnum(labeled[1]) : "",
+    glued?.[1] ?? "",
+    compact,
+  ].filter(Boolean);
 
   for (const text of texts) {
     for (let i = 0; i <= text.length - 18; i += 1) {
       if (prefixes.length && !matchesAnyPrefix(text.slice(i, i + 2), prefixes)) continue;
       const curp = acceptCurp(text.slice(i, i + 18), prefixes);
-      if (curp) found.add(curp);
+      if (curp && curp.length === 18) found.add(curp);
     }
   }
   return [...found];
@@ -229,10 +238,15 @@ export function confirmCurpReads(
   apellidoPaterno = "",
 ): string {
   const prefixes = prefixesFromPaterno(apellidoPaterno);
-  const valid = reads.filter(
-    (value) => value.length === 18 && looksLikeCurp(value) && matchesAnyPrefix(value, prefixes),
+  const twoLetter = prefixes.filter((prefix) => prefix.length >= 2);
+  const eighteen = reads.filter((value) => value.length === 18 && looksLikeCurp(value));
+  const matching = eighteen.filter((value) => matchesAnyPrefix(value, prefixes));
+  const strong = matching.filter((value) =>
+    twoLetter.some((prefix) => prefixMatches(value, prefix)),
   );
+  const valid = strong.length ? strong : matching.length ? matching : eighteen;
   if (valid.length === 0) return "";
+  if (valid.length === 1) return valid[0];
 
   const fullAgreement =
     winnerWithMin(tally(valid), 3) || winnerWithMin(tally(valid), 2);
@@ -250,8 +264,6 @@ export function confirmCurpReads(
     return withOfficialCheckDigit(head17);
   }
 
-  if (valid.length < 2) return "";
-
   let merged = "";
   for (let i = 0; i < 18; i += 1) {
     const minVotes = i === 17 ? 2 : 1;
@@ -265,5 +277,6 @@ export function confirmCurpReads(
     }
     merged += char || valid[0][i];
   }
-  return looksLikeCurp(merged) && matchesAnyPrefix(merged, prefixes) ? merged : "";
+  if (looksLikeCurp(merged) && matchesAnyPrefix(merged, prefixes)) return merged;
+  return valid[0] ?? "";
 }

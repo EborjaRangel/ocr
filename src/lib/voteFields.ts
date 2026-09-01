@@ -86,9 +86,18 @@ export function confirmNameReads(
   apellidoPaterno: string;
   apellidoMaterno: string;
 } {
-  return {
-    apellidoPaterno: confirmMajority(reads.map((item) => item.apellidoPaterno)),
-    apellidoMaterno: confirmMajority(reads.map((item) => item.apellidoMaterno)),
-    nombre: confirmMajority(reads.map((item) => item.nombre)),
-  };
+  const apellidoPaterno = confirmMajority(reads.map((item) => item.apellidoPaterno));
+  const paternoKey = foldKey(apellidoPaterno);
+  const apellidoMaterno = confirmMajority(
+    reads
+      .map((item) => item.apellidoMaterno)
+      .filter((value) => value && foldKey(value) !== paternoKey),
+  );
+  const used = new Set([paternoKey, foldKey(apellidoMaterno)].filter(Boolean));
+  const nombre = confirmMajority(
+    reads
+      .map((item) => item.nombre)
+      .filter((value) => value && !used.has(foldKey(value))),
+  );
+  return { apellidoPaterno, apellidoMaterno, nombre };
 }
