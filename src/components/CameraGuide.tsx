@@ -3,8 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 
 const INE_RATIO = 1600 / 1010;
-const EDGE_MARGIN = 0.016;
+const EDGE_MARGIN = 0.018;
 const INNER_PAD = 0.03;
+const TOP_CHROME = 56;
+const BOTTOM_CHROME = 104;
+
+/** Right-of-photo column on a framed INE. */
+const NAME_LEFT = 0.29;
+const NAME_RIGHT = 0.86;
+const NAME_TOP = 0.12;
+const NAME_BOTTOM = 0.4;
+/** First line after NOMBRE: apellido paterno. */
+const PATERNO_Y = 0.215;
 
 type CameraGuideProps = {
   onCapture: (file: File) => void;
@@ -12,12 +22,29 @@ type CameraGuideProps = {
 };
 
 type Rect = { x: number; y: number; width: number; height: number };
+type Insets = { top: number; bottom: number; left: number; right: number };
 
-function outerGuide(viewW: number, viewH: number): Rect {
-  const insetX = Math.max(6, viewW * EDGE_MARGIN);
-  const insetY = Math.max(6, viewH * EDGE_MARGIN);
-  const maxW = Math.max(40, viewW - insetX * 2);
-  const maxH = Math.max(28, viewH - insetY * 2);
+function cssPx(value: string): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function readSafeInsets(): Insets {
+  const root = getComputedStyle(document.documentElement);
+  return {
+    top: cssPx(root.getPropertyValue("--sat")),
+    bottom: cssPx(root.getPropertyValue("--sab")),
+    left: cssPx(root.getPropertyValue("--sal")),
+    right: cssPx(root.getPropertyValue("--sar")),
+  };
+}
+
+function outerGuide(viewW: number, viewH: number, inset: Insets): Rect {
+  const padTop = inset.top + TOP_CHROME;
+  const padBottom = inset.bottom + BOTTOM_CHROME;
+  const padX = Math.max(inset.left, inset.right, viewW * EDGE_MARGIN, 8);
+  const maxW = Math.max(40, viewW - padX * 2);
+  const maxH = Math.max(28, viewH - padTop - padBottom);
   let width = maxW;
   let height = width / INE_RATIO;
   if (height > maxH) {
@@ -26,7 +53,7 @@ function outerGuide(viewW: number, viewH: number): Rect {
   }
   return {
     x: (viewW - width) / 2,
-    y: (viewH - height) / 2,
+    y: padTop + (maxH - height) / 2,
     width,
     height,
   };
@@ -77,6 +104,7 @@ export function CameraGuide({ onCapture, onClose }: CameraGuideProps) {
   const [error, setError] = useState("");
   const [ready, setReady] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [insets, setInsets] = useState<Insets>({ top: 0, bottom: 0, left: 0, right: 0 });
 
   useEffect(() => {
     const previous = document.body.style.overflow;
@@ -90,8 +118,16 @@ export function CameraGuide({ onCapture, onClose }: CameraGuideProps) {
     function measure() {
       const node = stageRef.current;
       if (!node) return;
+      const vv = window.visualViewport;
+      if (vv) {
+        node.style.top = `${vv.offsetTop}px`;
+        node.style.left = `${vv.offsetLeft}px`;
+        node.style.width = `${vv.width}px`;
+        node.style.height = `${vv.height}px`;
+      }
       const box = node.getBoundingClientRect();
       setSize({ width: box.width, height: box.height });
+      setInsets(readSafeInsets());
     }
 
     measure();
@@ -100,9 +136,13 @@ export function CameraGuide({ onCapture, onClose }: CameraGuideProps) {
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     window.addEventListener("orientationchange", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("scroll", measure);
     return () => {
       observer.disconnect();
       window.removeEventListener("orientationchange", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("scroll", measure);
     };
   }, []);
 
@@ -126,10 +166,19 @@ export function CameraGuide({ onCapture, onClose }: CameraGuideProps) {
         streamRef.current = stream;
         const video = videoRef.current;
         if (video) {
+          video.setAttribute("playsinline", "true");
+          video.setAttribute("webkit-playsinline", "true");
           video.srcObject = stream;
           await video.play();
         }
         setReady(true);
+        requestAnimationFrame(() => {
+          const node = stageRef.current;
+          if (!node) return;
+          const box = node.getBoundingClientRect();
+          setSize({ width: box.width, height: box.height });
+          setInsets(readSafeInsets());
+        });
       } catch {
         if (!cancelled) {
           setError("No se pudo abrir la cámara. Revisa el permiso o usa Galería.");
@@ -153,7 +202,7 @@ export function CameraGuide({ onCapture, onClose }: CameraGuideProps) {
     const box = stage.getBoundingClientRect();
     const viewW = box.width || size.width || window.innerWidth;
     const viewH = box.height || size.height || window.innerHeight;
-    const captureBox = innerGuide(outerGuide(viewW, viewH));
+    const captureBox = innerGuide(outerGuide(viewW, viewH, insets));
     const source = screenToVideo(
       captureBox.x,
       captureBox.y,
@@ -190,14 +239,25 @@ export function CameraGuide({ onCapture, onClose }: CameraGuideProps) {
 
   const viewW = size.width || 1;
   const viewH = size.height || 1;
-  const outer = outerGuide(viewW, viewH);
+  const outer = outerGuide(viewW, viewH, insets);
   const inner = innerGuide(outer);
+  const nameBox = {
+    x: inner.x + inner.width * NAME_LEFT,
+    y: inner.y + inner.height * NAME_TOP,
+    width: inner.width * (NAME_RIGHT - NAME_LEFT),
+    height: inner.height * (NAME_BOTTOM - NAME_TOP),
+  };
+  const paternoY = inner.y + inner.height * PATERNO_Y;
 
   return (
-    <div ref={stageRef} className="fixed inset-0 z-50 bg-black text-white">
+    <div
+      ref={stageRef}
+      className="fixed inset-0 z-50 overflow-hidden bg-black text-white"
+      style={{ width: "100dvw", height: "100dvh" }}
+    >
       <video
         ref={videoRef}
-        className="absolute inset-0 h-full w-full object-cover"
+        className="absolute inset-0 h-full w-full object-cover object-center"
         playsInline
         muted
         autoPlay
@@ -236,6 +296,40 @@ export function CameraGuide({ onCapture, onClose }: CameraGuideProps) {
           strokeWidth="2"
           strokeDasharray="8 6"
         />
+        <rect
+          x={nameBox.x}
+          y={nameBox.y}
+          width={nameBox.width}
+          height={nameBox.height}
+          rx="4"
+          fill="rgba(196,163,90,0.08)"
+          stroke="#C4A35A"
+          strokeWidth="1.5"
+        />
+        <line
+          x1={nameBox.x}
+          y1={paternoY}
+          x2={nameBox.x + nameBox.width}
+          y2={paternoY}
+          stroke="#F4D27A"
+          strokeWidth="2.5"
+        />
+        <line
+          x1={nameBox.x}
+          y1={paternoY - 7}
+          x2={nameBox.x}
+          y2={paternoY + 7}
+          stroke="#F4D27A"
+          strokeWidth="2.5"
+        />
+        <line
+          x1={nameBox.x + nameBox.width}
+          y1={paternoY - 7}
+          x2={nameBox.x + nameBox.width}
+          y2={paternoY + 7}
+          stroke="#F4D27A"
+          strokeWidth="2.5"
+        />
         {(
           [
             [outer.x, outer.y, 1, 1],
@@ -256,13 +350,23 @@ export function CameraGuide({ onCapture, onClose }: CameraGuideProps) {
       </svg>
 
       <div
+        className="pointer-events-none absolute text-[10px] font-semibold uppercase tracking-wide text-[#F4D27A]"
+        style={{
+          left: nameBox.x + 4,
+          top: paternoY - 16,
+          textShadow: "0 1px 3px rgba(0,0,0,0.85)",
+        }}
+      >
+        Apellido paterno
+      </div>
+
+      <div
         className="pointer-events-none absolute left-4 right-4 text-center"
-        style={{ top: `max(10px, calc(env(safe-area-inset-top) + 8px))` }}
+        style={{ top: `max(8px, calc(env(safe-area-inset-top) + 6px))` }}
       >
         <p className="text-sm font-semibold tracking-wide">Llena el recuadro interior</p>
         <p className="mt-1 text-xs text-white/80">
-          Acerca la INE hasta la línea punteada. El margen dorado debe quedar
-          libre para que se vea nítida.
+          Pon el apellido paterno sobre la línea dorada, a la derecha de la foto.
         </p>
       </div>
 

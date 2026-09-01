@@ -77,7 +77,7 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
 
   const fileHint = useMemo(() => {
     if (!fileName) {
-      return "En el celular, encuadra la INE en el recuadro de las orillas. También puedes subir una foto de la galería.";
+      return "En el celular, llena el recuadro y pon el apellido paterno sobre la línea dorada. También puedes subir una foto de la galería.";
     }
     return aligned
       ? `${fileName} · INE ajustada al recuadro, lista para OCR`
@@ -233,9 +233,8 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
           Lector de credencial INE
         </h1>
         <p className="max-w-2xl text-sm leading-6 text-stone-600">
-          Toma la foto desde el celular: un recuadro en las orillas te indica
-          a qué distancia poner la INE. Cuando llene el marco, dispara. Luego
-          pulsa Leer credencial.
+          Toma la foto desde el celular: llena el recuadro y alinea el apellido
+          paterno con la línea dorada. Luego pulsa Leer credencial.
         </p>
       </header>
 
@@ -321,8 +320,8 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
               <div className="flex h-64 flex-col items-center justify-center gap-2 px-6 text-center text-sm text-stone-500">
                 <span className="font-medium text-stone-700">Sin imagen</span>
                 <span>
-                  Pulsa Tomar foto y acerca el teléfono hasta que la credencial
-                  llene el recuadro. Después pulsa Leer credencial.
+                  Pulsa Tomar foto, llena el recuadro y pon el apellido paterno
+                  sobre la línea dorada. Después pulsa Leer credencial.
                 </span>
               </div>
             )}

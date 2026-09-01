@@ -8,11 +8,11 @@ export type IneZone = {
 };
 
 export const NAME_ZONES: IneZone[] = [
-  { left: 0.28, top: 0.08, right: 0.84, bottom: 0.48, scale: 3.2 },
-  { left: 0.3, top: 0.12, right: 0.8, bottom: 0.46, scale: 3.6, contrast: true },
-  { left: 0.26, top: 0.1, right: 0.82, bottom: 0.5, scale: 2.8 },
-  { left: 0.32, top: 0.16, right: 0.76, bottom: 0.44, scale: 4 },
-  { left: 0.28, top: 0.2, right: 0.78, bottom: 0.42, scale: 4.2, contrast: true },
+  { left: 0.26, top: 0.06, right: 0.88, bottom: 0.5, scale: 3.2 },
+  { left: 0.29, top: 0.1, right: 0.84, bottom: 0.46, scale: 3.6, contrast: true },
+  { left: 0.24, top: 0.08, right: 0.86, bottom: 0.52, scale: 2.8 },
+  { left: 0.3, top: 0.14, right: 0.8, bottom: 0.44, scale: 4 },
+  { left: 0.27, top: 0.18, right: 0.82, bottom: 0.42, scale: 4.2, contrast: true },
 ];
 
 export const CURP_ZONES: IneZone[] = [
