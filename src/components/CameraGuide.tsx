@@ -87,17 +87,18 @@ export function CameraGuide({ onCapture, onClose }: CameraGuideProps) {
   }, []);
 
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-
     function measure() {
-      const box = stage.getBoundingClientRect();
+      const node = stageRef.current;
+      if (!node) return;
+      const box = node.getBoundingClientRect();
       setSize({ width: box.width, height: box.height });
     }
 
     measure();
+    const node = stageRef.current;
+    if (!node) return;
     const observer = new ResizeObserver(measure);
-    observer.observe(stage);
+    observer.observe(node);
     window.addEventListener("orientationchange", measure);
     return () => {
       observer.disconnect();
