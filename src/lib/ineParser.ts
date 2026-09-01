@@ -1,4 +1,4 @@
-import { tokensCoyoacanEnTexto } from "./coyoacanSeccion";
+import { seccionCandidatesInText, tokensCoyoacanEnTexto } from "./coyoacanSeccion";
 import { confirmCurpReads, extractAllValidCurps, prefixesFromPaterno } from "./curp";
 import type { IneFields } from "./types";
 import { EMPTY_INE_FIELDS } from "./types";
@@ -365,7 +365,16 @@ function birthYearFromCurp(curp: string): Set<string> {
 }
 
 function isAllowedSeccion(value: string, blocked: Set<string>): boolean {
-  return Boolean(value) && !isYear(value) && !blocked.has(value) && value !== "0001";
+  return (
+    Boolean(value) &&
+    !isYear(value) &&
+    !blocked.has(value) &&
+    !["0001", "0009", "0014"].includes(value)
+  );
+}
+
+function firstAllowedSeccion(candidates: string[], blocked: Set<string>): string {
+  return candidates.find((value) => isAllowedSeccion(value, blocked)) ?? "";
 }
 
 function seccionFromCoyoacanGrid(text: string, blocked: Set<string>): string {
@@ -379,28 +388,15 @@ function seccionAfterLabelInRaw(raw: string, blocked: Set<string>): string {
   const compacted = compact(raw).replace(/[^A-Z0-9]/g, "");
   const index = compacted.search(/S[E3]CC(?:ION|I0N|JON|10N|1ON)/);
   if (index < 0) return "";
-  const after = compacted
-    .slice(index)
-    .replace(/^S[E3]CC(?:ION|I0N|JON|10N|1ON)/, "")
-    .slice(0, 10);
-  const glued = after.match(/^(?:[A-Z]{0,2})(0\d{3}|5515|[OQD]\d{3})/);
-  if (!glued?.[1]) return "";
-  const value = glued[1].replace(/^[OQD]/, "0");
-  return isAllowedSeccion(value, blocked) ? value : "";
+  const after = compacted.slice(index).replace(/^S[E3]CC(?:ION|I0N|JON|10N|1ON)/, "");
+  return firstAllowedSeccion(seccionCandidatesInText(after.slice(0, 28), true), blocked);
 }
 
 function seccionToTheRight(line: string, blocked: Set<string>): string {
   const folded = fold(line);
   const afterLabel = folded.replace(/.*?S[E3]CC(?:ION|I0N|JON|10N|1ON)\s*/i, "");
   if (afterLabel === folded) return "";
-  const glued = afterLabel.replace(/[^A-Z0-9]/g, "").match(/^(0\d{3}|5515|[OQD]\d{3})/);
-  if (glued?.[1]) {
-    const value = glued[1].replace(/^[OQD]/, "0");
-    if (isAllowedSeccion(value, blocked)) return value;
-  }
-  const nearby = afterLabel.slice(0, 12).match(/(0\d{3}|5515)/);
-  if (nearby?.[1] && isAllowedSeccion(nearby[1], blocked)) return nearby[1];
-  return "";
+  return firstAllowedSeccion(seccionCandidatesInText(afterLabel.slice(0, 20), true), blocked);
 }
 
 function domicilioFalseSecciones(raw: string): Set<string> {
@@ -414,11 +410,13 @@ function domicilioFalseSecciones(raw: string): Set<string> {
 }
 
 function seccionFromDigitCrop(text: string, blocked: Set<string>): string[] {
-  const found: string[] = [];
-  for (const match of text.matchAll(/(?<![0-9])(0\d{3}|5515)(?![0-9])/g)) {
-    if (isAllowedSeccion(match[1], blocked)) found.push(match[1]);
-  }
-  return found;
+  const four = seccionCandidatesInText(text, false).filter((value) =>
+    isAllowedSeccion(value, blocked),
+  );
+  if (four.length) return four;
+  return seccionCandidatesInText(text, true).filter((value) =>
+    isAllowedSeccion(value, blocked),
+  );
 }
 
 function extractSeccionFromLines(lines: string[], blocked: Set<string>): string {
@@ -428,11 +426,10 @@ function extractSeccionFromLines(lines: string[], blocked: Set<string>): string 
     const sameLine = seccionToTheRight(lines[i], blocked);
     if (sameLine) return sameLine;
 
-    for (let j = i + 1; j < Math.min(i + 3, lines.length); j += 1) {
+    for (let j = i + 1; j < Math.min(i + 4, lines.length); j += 1) {
       if (isDateOrCurpLine(lines[j]) || isNombreLabel(lines[j])) continue;
-      const next = tokensCoyoacanEnTexto(lines[j]).find((value) =>
-        isAllowedSeccion(value, blocked),
-      );
+      if (isSeccionHeader(lines[j])) continue;
+      const next = firstAllowedSeccion(seccionCandidatesInText(lines[j], true), blocked);
       if (next) return next;
     }
   }
@@ -479,7 +476,8 @@ function extractSeccionFromRaw(raw: string, curp: string): string {
     confirmVotes(labeled, 2) ||
     confirmVotes(labeled, 1) ||
     confirmVotes(crops, 3) ||
-    confirmVotes(crops, 2);
+    confirmVotes(crops, 2) ||
+    confirmVotes(crops, 1);
   return voted ? voted.padStart(4, "0") : "";
 }
 

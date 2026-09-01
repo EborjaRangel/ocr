@@ -125,10 +125,17 @@ async function ocrInBrowser(
       PSM.SPARSE_TEXT,
       PSM.SINGLE_BLOCK,
     ];
+    const seccionLists = [
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      "0123456789",
+      "0123456789",
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      "0123456789",
+    ];
     for (let i = 0; i < images.secciones.length; i += 1) {
       await worker.setParameters({
         tessedit_pageseg_mode: seccionModes[i] ?? PSM.SPARSE_TEXT,
-        tessedit_char_whitelist: "0123456789",
+        tessedit_char_whitelist: seccionLists[i] ?? "0123456789",
         preserve_interword_spaces: "1",
       });
       secciones.push((await worker.recognize(images.secciones[i])).data.text ?? "");
