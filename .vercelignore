@@ -1,0 +1,4 @@
+data/*.csv
+.next
+node_modules
+.railway
