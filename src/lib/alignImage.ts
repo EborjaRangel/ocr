@@ -1,5 +1,3 @@
-import { chooseUprightByInstituto } from "./headerOrient";
-
 export const INE_WIDTH = 1600;
 export const INE_HEIGHT = 1010;
 
@@ -247,32 +245,16 @@ function cropToBox(source: HTMLCanvasElement, box: CardBox): HTMLCanvasElement {
   return canvas;
 }
 
-async function cropHeader(source: HTMLCanvasElement): Promise<Blob> {
-  const canvas = document.createElement("canvas");
-  const width = Math.max(8, Math.floor(source.width * 0.9));
-  const height = Math.max(8, Math.floor(source.height * 0.28));
-  canvas.width = Math.round(width * 2);
-  canvas.height = Math.round(height * 2);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("No se pudo recortar el encabezado");
-  ctx.drawImage(
-    source,
-    Math.floor(source.width * 0.03),
-    0,
-    width,
-    height,
-    0,
-    0,
-    canvas.width,
-    canvas.height,
-  );
-  return canvasToJpeg(canvas);
-}
-
 async function toAligned(source: HTMLCanvasElement): Promise<AlignedImage> {
   const canvas = fillCanonical(source);
   const blob = await canvasToJpeg(canvas);
   return { blob, width: canvas.width, height: canvas.height };
+}
+
+function alreadyFillsFrame(canvas: HTMLCanvasElement): boolean {
+  const ratio = canvas.width / Math.max(1, canvas.height);
+  const target = INE_WIDTH / INE_HEIGHT;
+  return Math.abs(ratio - target) / target < 0.08;
 }
 
 export async function alignIneImage(source: Blob): Promise<AlignedImage> {
@@ -281,17 +263,14 @@ export async function alignIneImage(source: Blob): Promise<AlignedImage> {
     canvas = drawRotated(canvas, 90);
   }
 
-  const bounds = findCardBounds(canvas);
-  if (bounds.width < canvas.width || bounds.height < canvas.height) {
-    canvas = cropToBox(canvas, bounds);
+  if (!alreadyFillsFrame(canvas)) {
+    const bounds = findCardBounds(canvas);
+    if (bounds.width < canvas.width || bounds.height < canvas.height) {
+      canvas = cropToBox(canvas, bounds);
+    }
   }
 
-  const flipped = drawRotated(canvas, 180);
-  const winner = await chooseUprightByInstituto(
-    await cropHeader(canvas),
-    await cropHeader(flipped),
-  );
-  return toAligned(winner === 1 ? flipped : canvas);
+  return toAligned(canvas);
 }
 
 export async function rotateAlignedImage(

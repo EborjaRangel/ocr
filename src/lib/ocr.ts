@@ -1,6 +1,6 @@
-import { cropPixels, cropRegion } from "./alignImage";
+import { cropRegion } from "./alignImage";
 import { hasAnyIneData, parseIneText } from "./ineParser";
-import { seccionBesideLabel, seccionTargetBoxes, type OcrWord } from "./seccionFromWords";
+import { CURP_ZONES, NAME_ZONES, SECCION_ZONES } from "./ineZones";
 import type { IneFields, OcrProgress } from "./types";
 import { EMPTY_INE_FIELDS } from "./types";
 
@@ -140,126 +140,31 @@ async function ocrInBrowser(
   }
 }
 
-function tesseractWords(data: {
-  words?: Array<{ text?: string; bbox?: { x0: number; y0: number; x1: number; y1: number } }> | null;
-  blocks?: Array<{
-    paragraphs?: Array<{
-      lines?: Array<{
-        words?: Array<{ text?: string; bbox?: { x0: number; y0: number; x1: number; y1: number } }> | null;
-      }> | null;
-    }> | null;
-  }> | null;
-}): OcrWord[] {
-  const mapped = (data.words ?? [])
-    .filter((word) => word.text && word.bbox)
-    .map((word) => ({
-      text: word.text ?? "",
-      bbox: word.bbox as OcrWord["bbox"],
-    }));
-  if (mapped.length) return mapped;
-
-  const nested: OcrWord[] = [];
-  for (const block of data.blocks ?? []) {
-    for (const paragraph of block.paragraphs ?? []) {
-      for (const line of paragraph.lines ?? []) {
-        for (const word of line.words ?? []) {
-          if (!word.text || !word.bbox) continue;
-          nested.push({ text: word.text, bbox: word.bbox });
-        }
-      }
-    }
-  }
-  return nested;
-}
-
-async function seccionCropsAroundLabel(source: Blob): Promise<{
-  crops: Blob[];
-  fromWords: string;
-}> {
-  const band = await cropRegion(source, 0, 0.48, 1, 1, 2);
-  const { createWorker, PSM } = await import("tesseract.js");
-  const worker = await createWorker("spa", 1, {
-    workerPath: "/tesseract/worker.min.js",
-    corePath: "/tesseract/tesseract-core-simd-lstm.wasm.js",
-    langPath: "/tesseract/lang",
-    gzip: true,
-    workerBlobURL: false,
-  });
-
-  try {
-    await worker.setParameters({
-      tessedit_pageseg_mode: PSM.SPARSE_TEXT,
-      preserve_interword_spaces: "1",
-    });
-    const result = await worker.recognize(band);
-    const words = tesseractWords(result.data);
-    const fromWords = seccionBesideLabel(words);
-    const bitmap = await createImageBitmap(band);
-    const boxes = seccionTargetBoxes(words, bitmap.width, bitmap.height);
-    bitmap.close();
-    if (boxes.length === 0) {
-      return {
-        fromWords,
-        crops: [
-          await cropRegion(source, 0.48, 0.5, 0.95, 0.82, 3.4),
-          await cropRegion(source, 0.52, 0.52, 0.92, 0.78, 4.0, true),
-          await cropRegion(source, 0.45, 0.48, 0.88, 0.86, 3.0),
-          await cropRegion(source, 0.55, 0.54, 0.9, 0.76, 4.6),
-          await cropRegion(source, 0.5, 0.56, 0.85, 0.8, 3.6, true),
-        ],
-      };
-    }
-
-    const crops = await Promise.all(
-      boxes.map((box, index) =>
-        cropPixels(band, box.x, box.y, box.width, box.height, 4 + index * 0.4, index > 0),
-      ),
-    );
-    return { crops, fromWords };
-  } finally {
-    await worker.terminate();
-  }
-}
-
 export async function readAlignedIne(
   blob: Blob,
   onProgress?: (progress: OcrProgress) => void,
 ): Promise<IneReadResult> {
-  onProgress?.({ status: "Preparando 5 lecturas de cada campo", progress: 12 });
-  const names = [
-    await cropRegion(blob, 0.02, 0.18, 0.6, 0.48, 2.8),
-    await cropRegion(blob, 0.02, 0.16, 0.58, 0.46, 3.2, true),
-    await cropRegion(blob, 0.01, 0.2, 0.62, 0.5, 3.6),
-    await cropRegion(blob, 0.0, 0.14, 0.64, 0.52, 2.4),
-    await cropRegion(blob, 0.03, 0.19, 0.56, 0.44, 4.0, true),
-  ];
-  const curps = [
-    await cropRegion(blob, 0.02, 0.46, 0.7, 0.74, 3.8),
-    await cropRegion(blob, 0.03, 0.5, 0.58, 0.67, 4.2, true),
-    await cropRegion(blob, 0.01, 0.48, 0.64, 0.7, 5.0, true),
-    await cropRegion(blob, 0.0, 0.44, 0.66, 0.76, 3.2),
-    await cropRegion(blob, 0.04, 0.51, 0.55, 0.69, 4.6),
-  ];
-  let located = { crops: [] as Blob[], fromWords: "" };
-  try {
-    located = await seccionCropsAroundLabel(blob);
-  } catch {
-    located = { crops: [], fromWords: "" };
-  }
-  const fallbackSecciones = [
-    () => cropRegion(blob, 0.48, 0.5, 0.95, 0.82, 3.4),
-    () => cropRegion(blob, 0.52, 0.52, 0.92, 0.78, 4.0, true),
-    () => cropRegion(blob, 0.45, 0.48, 0.88, 0.86, 3.0),
-    () => cropRegion(blob, 0.55, 0.54, 0.9, 0.76, 4.6),
-    () => cropRegion(blob, 0.5, 0.56, 0.85, 0.8, 3.6, true),
-  ];
-  const secciones = [...located.crops];
-  for (const makeCrop of fallbackSecciones) {
-    if (secciones.length >= 5) break;
-    secciones.push(await makeCrop());
-  }
+  onProgress?.({ status: "Preparando recortes de cada campo", progress: 28 });
+  const names = await Promise.all(
+    NAME_ZONES.map((zone) =>
+      cropRegion(blob, zone.left, zone.top, zone.right, zone.bottom, zone.scale, zone.contrast),
+    ),
+  );
+  onProgress?.({ status: "Preparando recortes de CURP y sección", progress: 36 });
+  const [curps, secciones] = await Promise.all([
+    Promise.all(
+      CURP_ZONES.map((zone) =>
+        cropRegion(blob, zone.left, zone.top, zone.right, zone.bottom, zone.scale, zone.contrast),
+      ),
+    ),
+    Promise.all(
+      SECCION_ZONES.map((zone) =>
+        cropRegion(blob, zone.left, zone.top, zone.right, zone.bottom, zone.scale, zone.contrast),
+      ),
+    ),
+  ]);
 
-  onProgress?.({ status: "Comparando las 5 lecturas de cada campo", progress: 20 });
+  onProgress?.({ status: "Leyendo la credencial", progress: 42 });
 
   const form = new FormData();
   form.append("image", blob, "ine.jpg");
@@ -278,10 +183,6 @@ export async function readAlignedIne(
   if (!text.trim()) {
     onProgress?.({ status: "Leyendo en el navegador", progress: 30 });
     text = await ocrInBrowser({ full: blob, names, curps, secciones }, onProgress);
-  }
-
-  if (located.fromWords) {
-    text = `${text}\n===SECCION===\nSECCIÓN ${located.fromWords}`;
   }
 
   const fields = parseIneText(text);

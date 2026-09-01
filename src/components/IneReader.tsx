@@ -109,8 +109,8 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
     clearForm();
     setMessage(null);
     setAlignBusy(true);
-    setOcrProgress(8);
-    setOcrStatus("Alineando: INSTITUTO arriba y la credencial al recuadro");
+    setOcrProgress(35);
+    setOcrStatus("Ajustando la credencial al recuadro");
     setPreviewBlob(nextFile);
 
     try {
