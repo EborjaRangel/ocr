@@ -248,13 +248,10 @@ export function confirmCurpReads(
   if (valid.length === 0) return "";
   if (valid.length === 1) return valid[0];
 
-  const fullAgreement =
-    winnerWithMin(tally(valid), 3) || winnerWithMin(tally(valid), 2);
+  const fullAgreement = winnerWithMin(tally(valid), 2);
   if (fullAgreement) return fullAgreement;
 
-  const head17 =
-    winnerWithMin(tally(valid.map((value) => value.slice(0, 17))), 3) ||
-    winnerWithMin(tally(valid.map((value) => value.slice(0, 17))), 2);
+  const head17 = winnerWithMin(tally(valid.map((value) => value.slice(0, 17))), 2);
   if (head17) {
     const lastVotes = valid
       .filter((value) => value.startsWith(head17))

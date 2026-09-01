@@ -257,7 +257,7 @@ function extractNamesFromLines(
   return best;
 }
 
-function numberedBlocks(rawText: string, base: string, count = 5): string[] {
+function numberedBlocks(rawText: string, base: string, count = 2): string[] {
   const blocks = [blockAfter(rawText, `===${base}===`)];
   for (let i = 2; i <= count; i += 1) {
     blocks.push(blockAfter(rawText, `===${base}${i}===`));
@@ -276,7 +276,7 @@ function collectNameReads(
     beforeCrops.length ? beforeCrops : lines,
     false,
   );
-  const fromCrops = numberedBlocks(rawText, "NOMBRES", 5).map((block) =>
+  const fromCrops = numberedBlocks(rawText, "NOMBRES", 2).map((block) =>
     extractNamesFromLines(linesOf(block), true),
   );
   return [fromFull, ...fromCrops].filter((item) => scoreNames(item) > 0);
@@ -308,7 +308,7 @@ function extractCurp(
   lines: string[],
   apellidoPaterno: string,
 ): string {
-  const blocks = [...numberedBlocks(rawText, "CURP", 5), rawText];
+  const blocks = [...numberedBlocks(rawText, "CURP", 2), rawText];
   const reads = blocks.flatMap((block) =>
     extractAllValidCurps(block, apellidoPaterno),
   );
@@ -457,7 +457,7 @@ function collectSeccionReads(raw: string, blocked: Set<string>): {
   take(extractSeccionFromLines(linesOf(fullText), blocked), immediate, true);
   take(seccionFromCoyoacanGrid(fullText, blocked), immediate, true);
 
-  for (const block of numberedBlocks(raw, "SECCION", 5)) {
+  for (const block of numberedBlocks(raw, "SECCION", 2)) {
     take(seccionAfterLabelInRaw(block, blocked), labeled);
     take(extractSeccionFromLines(linesOf(block), blocked), labeled);
     for (const token of seccionFromDigitCrop(block, blocked)) {
@@ -475,7 +475,6 @@ function extractSeccionFromRaw(raw: string, curp: string): string {
     confirmVotes(immediate, 1) ||
     confirmVotes(labeled, 2) ||
     confirmVotes(labeled, 1) ||
-    confirmVotes(crops, 3) ||
     confirmVotes(crops, 2) ||
     confirmVotes(crops, 1);
   return voted ? voted.padStart(4, "0") : "";

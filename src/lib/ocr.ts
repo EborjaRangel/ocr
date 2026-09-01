@@ -78,20 +78,8 @@ async function ocrInBrowser(
   });
 
   try {
-    await worker.setParameters({
-      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-      preserve_interword_spaces: "1",
-    });
-    const fullText = (await worker.recognize(images.full)).data.text ?? "";
-
     const names: string[] = [];
-    const nameModes = [
-      PSM.SINGLE_COLUMN,
-      PSM.SINGLE_BLOCK,
-      PSM.SPARSE_TEXT,
-      PSM.SINGLE_COLUMN,
-      PSM.SINGLE_BLOCK,
-    ];
+    const nameModes = [PSM.SINGLE_COLUMN, PSM.SINGLE_BLOCK];
     for (let i = 0; i < images.names.length; i += 1) {
       await worker.setParameters({
         tessedit_pageseg_mode: nameModes[i] ?? PSM.SINGLE_COLUMN,
@@ -101,13 +89,7 @@ async function ocrInBrowser(
     }
 
     const curps: string[] = [];
-    const curpModes = [
-      PSM.SPARSE_TEXT,
-      PSM.SINGLE_LINE,
-      PSM.SINGLE_BLOCK,
-      PSM.SPARSE_TEXT,
-      PSM.SINGLE_LINE,
-    ];
+    const curpModes = [PSM.SPARSE_TEXT, PSM.SINGLE_LINE];
     for (let i = 0; i < images.curps.length; i += 1) {
       await worker.setParameters({
         tessedit_pageseg_mode: curpModes[i] ?? PSM.SPARSE_TEXT,
@@ -118,17 +100,8 @@ async function ocrInBrowser(
     }
 
     const secciones: string[] = [];
-    const seccionModes = [
-      PSM.SPARSE_TEXT,
-      PSM.SINGLE_BLOCK,
-      PSM.SINGLE_LINE,
-      PSM.SPARSE_TEXT,
-      PSM.SINGLE_BLOCK,
-    ];
+    const seccionModes = [PSM.SPARSE_TEXT, PSM.SINGLE_BLOCK];
     const seccionLists = [
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-      "0123456789",
-      "0123456789",
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
       "0123456789",
     ];
@@ -141,7 +114,7 @@ async function ocrInBrowser(
       secciones.push((await worker.recognize(images.secciones[i])).data.text ?? "");
     }
 
-      return assembleOcrText({ fullText, names, curps, secciones });
+      return assembleOcrText({ fullText: "", names, curps, secciones });
   } finally {
     await worker.terminate();
   }

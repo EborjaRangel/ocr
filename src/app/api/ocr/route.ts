@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
     const names = (
       await Promise.all(
-        [1, 2, 3, 4, 5].map((index) =>
+        [1, 2].map((index) =>
           fileToBuffer(
             form.get(`names${index}`) ?? (index === 1 ? form.get("names") : null),
           ),
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
     const curps = (
       await Promise.all(
-        [1, 2, 3, 4, 5].map((index) =>
+        [1, 2].map((index) =>
           fileToBuffer(
             form.get(`curp${index}`) ?? (index === 1 ? form.get("curp") : null),
           ),
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
     const secciones = (
       await Promise.all(
-        [1, 2, 3, 4, 5].map((index) =>
+        [1, 2].map((index) =>
           fileToBuffer(
             form.get(`seccion${index}`) ?? (index === 1 ? form.get("seccion") : null),
           ),
@@ -58,19 +58,7 @@ export async function POST(request: Request) {
     try {
       const parts: string[] = [];
 
-      await worker.setParameters({
-        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-        preserve_interword_spaces: "1",
-      });
-      parts.push((await worker.recognize(full)).data.text ?? "");
-
-      const nameModes = [
-        PSM.SINGLE_COLUMN,
-        PSM.SINGLE_BLOCK,
-        PSM.SPARSE_TEXT,
-        PSM.SINGLE_COLUMN,
-        PSM.SINGLE_BLOCK,
-      ];
+      const nameModes = [PSM.SINGLE_COLUMN, PSM.SINGLE_BLOCK];
       for (let i = 0; i < names.length; i += 1) {
         await worker.setParameters({
           tessedit_pageseg_mode: nameModes[i] ?? PSM.SINGLE_COLUMN,
@@ -81,13 +69,7 @@ export async function POST(request: Request) {
         parts.push((await worker.recognize(names[i])).data.text ?? "");
       }
 
-      const curpModes = [
-        PSM.SPARSE_TEXT,
-        PSM.SINGLE_LINE,
-        PSM.SINGLE_BLOCK,
-        PSM.SPARSE_TEXT,
-        PSM.SINGLE_LINE,
-      ];
+      const curpModes = [PSM.SPARSE_TEXT, PSM.SINGLE_LINE];
       for (let i = 0; i < curps.length; i += 1) {
         await worker.setParameters({
           tessedit_pageseg_mode: curpModes[i] ?? PSM.SPARSE_TEXT,
@@ -99,17 +81,8 @@ export async function POST(request: Request) {
         parts.push((await worker.recognize(curps[i])).data.text ?? "");
       }
 
-      const seccionModes = [
-        PSM.SPARSE_TEXT,
-        PSM.SINGLE_BLOCK,
-        PSM.SINGLE_LINE,
-        PSM.SPARSE_TEXT,
-        PSM.SINGLE_BLOCK,
-      ];
+      const seccionModes = [PSM.SPARSE_TEXT, PSM.SINGLE_BLOCK];
       const seccionLists = [
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-        "0123456789",
-        "0123456789",
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
         "0123456789",
       ];

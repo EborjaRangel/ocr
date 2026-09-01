@@ -68,11 +68,7 @@ export function confirmVotes(reads: string[], minVotes = 2): string {
 }
 
 export function confirmMajority(reads: string[]): string {
-  return (
-    confirmTextReads(reads, 3) ||
-    confirmTextReads(reads, 2) ||
-    confirmTextReads(reads, 1)
-  );
+  return confirmTextReads(reads, 2) || confirmTextReads(reads, 1);
 }
 
 export function confirmNameReads(
