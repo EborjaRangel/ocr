@@ -19,6 +19,13 @@ export const metadata: Metadata = {
     "Lee una foto de la credencial de elector y acumula nombre, apellidos, CURP y sección en un CSV.",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover" as const,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Form, Formik } from "formik";
+import { CameraGuide } from "@/components/CameraGuide";
 import { FormField } from "@/components/FormField";
 import { RegistrosTable } from "@/components/RegistrosTable";
 import { alignIneImage, rotateAlignedImage } from "@/lib/alignImage";
@@ -25,6 +26,7 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
   const [fileName, setFileName] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
   const [aligned, setAligned] = useState(false);
+  const [alignBusy, setAlignBusy] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrStatus, setOcrStatus] = useState("");
   const [ocrProgress, setOcrProgress] = useState(0);
@@ -39,6 +41,7 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
   );
   const [registros, setRegistros] = useState<IneRecord[]>(initialRegistros);
   const [loadingRegistros, setLoadingRegistros] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const jobRef = useRef(0);
 
   useEffect(() => {
@@ -74,7 +77,7 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
 
   const fileHint = useMemo(() => {
     if (!fileName) {
-      return "JPG, PNG o WEBP. Máximo 10 MB. Se recorta el fondo y la INE se agranda hasta llenar el recuadro.";
+      return "En el celular, encuadra la INE en el recuadro de las orillas. También puedes subir una foto de la galería.";
     }
     return aligned
       ? `${fileName} · INE ajustada al recuadro, lista para OCR`
@@ -105,7 +108,7 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
     setAligned(false);
     clearForm();
     setMessage(null);
-    setOcrBusy(true);
+    setAlignBusy(true);
     setOcrProgress(8);
     setOcrStatus("Alineando: INSTITUTO arriba y la credencial al recuadro");
     setPreviewBlob(nextFile);
@@ -115,12 +118,14 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
       if (job !== jobRef.current) return;
       setPreviewBlob(alignedImage.blob);
       setAligned(true);
-      setOcrStatus("Credencial derecha. Iniciando lectura OCR");
-      setOcrProgress(20);
-      await runOcr(alignedImage.blob, job);
+      setOcrStatus("");
+      setOcrProgress(0);
+      setMessage({
+        type: "ok",
+        text: "Imagen lista. Gira si hace falta y pulsa Leer credencial.",
+      });
     } catch (error) {
       if (job !== jobRef.current) return;
-      setOcrBusy(false);
       setMessage({
         type: "error",
         text:
@@ -128,11 +133,16 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
             ? `No se pudo alinear la imagen: ${error.message}`
             : "No se pudo alinear la imagen.",
       });
+    } finally {
+      if (job === jobRef.current) {
+        setAlignBusy(false);
+        setOcrStatus("");
+      }
     }
   }
 
   async function rotate(degrees: 90 | 180 | 270) {
-    if (!alignedBlobRef.current || ocrBusy) return;
+    if (!alignedBlobRef.current || ocrBusy || alignBusy) return;
     setOcrStatus("Girando imagen");
     const next = await rotateAlignedImage(alignedBlobRef.current, degrees);
     setPreviewBlob(next.blob);
@@ -223,10 +233,9 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
           Lector de credencial INE
         </h1>
         <p className="max-w-2xl text-sm leading-6 text-stone-600">
-          Si la INE queda chica o con fondo alrededor, se recorta y se
-          agranda hasta el borde del recuadro (así funciona mejor el OCR).
-          Debe quedar derecha, con INSTITUTO arriba. Luego se leen nombre,
-          apellidos, CURP y sección.
+          Toma la foto desde el celular: un recuadro en las orillas te indica
+          a qué distancia poner la INE. Cuando llene el marco, dispara. Luego
+          pulsa Leer credencial.
         </p>
       </header>
 
@@ -238,15 +247,22 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setCameraOpen(true)}
               className="inline-flex h-11 items-center rounded-xl bg-[#7A1F3D] px-4 text-sm font-medium text-white transition hover:bg-[#641832]"
             >
-              Subir o tomar foto
+              Tomar foto
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex h-11 items-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-medium text-stone-800 transition hover:bg-stone-50"
+            >
+              Galería
             </button>
             <button
               type="button"
               onClick={() => void rotate(270)}
-              disabled={!aligned || ocrBusy}
+              disabled={!aligned || ocrBusy || alignBusy}
               className="inline-flex h-11 items-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-medium text-stone-800 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Girar izq.
@@ -254,7 +270,7 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
             <button
               type="button"
               onClick={() => void rotate(90)}
-              disabled={!aligned || ocrBusy}
+              disabled={!aligned || ocrBusy || alignBusy}
               className="inline-flex h-11 items-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-medium text-stone-800 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Girar der.
@@ -262,7 +278,7 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
             <button
               type="button"
               onClick={() => void rotate(180)}
-              disabled={!aligned || ocrBusy}
+              disabled={!aligned || ocrBusy || alignBusy}
               className="inline-flex h-11 items-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-medium text-stone-800 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Girar 180°
@@ -270,16 +286,15 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
             <button
               type="button"
               onClick={() => void runOcr()}
-              disabled={!aligned || ocrBusy}
+              disabled={!aligned || ocrBusy || alignBusy}
               className="inline-flex h-11 items-center rounded-xl border border-stone-300 bg-white px-4 text-sm font-medium text-stone-800 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {ocrBusy ? "Leyendo..." : "Leer credencial"}
+              {ocrBusy ? "Leyendo..." : alignBusy ? "Alineando..." : "Leer credencial"}
             </button>
             <input
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={(event) => {
                 void onSelectFile(event.target.files?.[0] ?? null);
@@ -306,8 +321,8 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
               <div className="flex h-64 flex-col items-center justify-center gap-2 px-6 text-center text-sm text-stone-500">
                 <span className="font-medium text-stone-700">Sin imagen</span>
                 <span>
-                  Sube la INE aunque esté acostada. Primero se pone derecha y
-                  después se leen los datos.
+                  Pulsa Tomar foto y acerca el teléfono hasta que la credencial
+                  llene el recuadro. Después pulsa Leer credencial.
                 </span>
               </div>
             )}
@@ -320,7 +335,7 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
             </p>
           )}
 
-          {ocrBusy && (
+          {(ocrBusy || alignBusy) && (
             <div className="mt-4">
               <div className="mb-1 flex items-center justify-between text-xs text-stone-500">
                 <span>{ocrStatus || "Procesando"}</span>
@@ -423,10 +438,10 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
           </p>
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => setCameraOpen(true)}
             className="mt-3 inline-flex h-11 items-center rounded-xl bg-[#7A1F3D] px-4 text-sm font-medium text-white transition hover:bg-[#641832]"
           >
-            Volver a tomar foto o imagen
+            Volver a tomar foto
           </button>
         </div>
       )}
@@ -480,6 +495,16 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
         </div>
         <RegistrosTable registros={registros} loading={loadingRegistros} />
       </section>
+
+      {cameraOpen ? (
+        <CameraGuide
+          onClose={() => setCameraOpen(false)}
+          onCapture={(file) => {
+            setCameraOpen(false);
+            void onSelectFile(file);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
