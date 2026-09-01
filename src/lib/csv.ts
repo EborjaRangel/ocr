@@ -2,7 +2,9 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { IneFields, IneRecord } from "./types";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const DATA_DIR = process.env.VERCEL
+  ? path.join("/tmp", "ocr-data")
+  : path.join(process.cwd(), "data");
 const CSV_PATH = path.join(DATA_DIR, "registros.csv");
 const HEADERS = [
   "fecha",
@@ -91,7 +93,11 @@ export async function appendRegistro(fields: IneFields): Promise<IneRecord> {
 }
 
 export async function listRegistros(): Promise<IneRecord[]> {
-  await ensureCsvFile();
+  try {
+    await ensureCsvFile();
+  } catch {
+    return [];
+  }
   const content = await fs.readFile(CSV_PATH, "utf8");
   const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length <= 1) return [];
