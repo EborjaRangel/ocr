@@ -43,3 +43,5 @@ next-env.d.ts
 
 # lecturas de credenciales (datos personales)
 /data/*.csv
+
+.vercel
