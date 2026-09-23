@@ -14,13 +14,13 @@ export function axisLogoFile() {
 }
 
 export const AXIS_START_CAPTION =
-  "Hola, soy ChatCoyo, de AXIS. Voy a pedirte celular, correo y una foto de tu INE (puede ser vertical u horizontal).\n\nSi quieres cancelar, escribe /salir.\n\n¿Cuál es tu celular a 10 dígitos?";
+  "Hola, soy ChatCoyo. Voy a pedirte celular, correo y una foto de tu INE (puede ser vertical u horizontal).\n\nSi quieres cancelar, escribe /salir.\n\n¿Cuál es tu celular a 10 dígitos?";
 
 export const AXIS_HOLA_CAPTION =
-  "Hola, soy ChatCoyo, de AXIS. La foto de la INE puede ir vertical u horizontal.\nSi quieres cancelar, escribe /salir.\n\n¿Cuál es tu celular a 10 dígitos?";
+  "Hola, soy ChatCoyo. La foto de la INE puede ir vertical u horizontal.\nSi quieres cancelar, escribe /salir.\n\n¿Cuál es tu celular a 10 dígitos?";
 
 export const AXIS_HOLA_SHORT_CAPTION =
-  "Hola, soy ChatCoyo, de AXIS. ¿Cuál es tu celular a 10 dígitos?";
+  "Hola, soy ChatCoyo. ¿Cuál es tu celular a 10 dígitos?";
 
 export async function setAxisProfilePhoto(token: string): Promise<{ ok: boolean; description?: string }> {
   const jpeg = axisIconBuffer();
@@ -54,18 +54,14 @@ export async function setAxisBotIdentity(token: string): Promise<{
       body: JSON.stringify(body),
     }).then((response) => response.json() as Promise<{ ok: boolean; description?: string }>);
 
-  await fetch(`https://api.telegram.org/bot${token}/deleteMyProfilePhoto`, {
-    method: "POST",
-  }).catch(() => undefined);
-
   const [name, description, short, photo] = await Promise.all([
-    api("setMyName", { name: "ChatCoyo · AXIS" }),
+    api("setMyName", { name: "ChatCoyo" }),
     api("setMyDescription", {
       description:
-        "ChatCoyo de AXIS. Registro de celular, correo y credencial INE en Coyoacán. Escribe /hola para empezar.",
+        "ChatCoyo. Registro de celular, correo y credencial INE en Coyoacán. Escribe /hola para empezar.",
     }),
     api("setMyShortDescription", {
-      short_description: "ChatCoyo de AXIS. Registro de credencial INE.",
+      short_description: "ChatCoyo. Registro de credencial INE.",
     }),
     setAxisProfilePhoto(token),
   ]);

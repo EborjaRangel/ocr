@@ -7,7 +7,6 @@ import {
   AXIS_HOLA_CAPTION,
   AXIS_HOLA_SHORT_CAPTION,
   AXIS_START_CAPTION,
-  axisLogoFile,
 } from "./brand";
 import {
   CELULAR_REGEX,
@@ -50,6 +49,7 @@ const FIELD_HINTS: Record<EditableField, string> = {
 let botInstance: Bot | null = null;
 const seenUpdates = new Map<number, number>();
 const seenFiles = new Map<string, number>();
+const lastHelloAt = new Map<number, number>();
 
 function alreadyHandled(id: number, ttlMs = 10 * 60 * 1000): boolean {
   const now = Date.now();
@@ -122,6 +122,25 @@ function startRegistro(chatId: number): ChatSession {
   return resetSession(chatId);
 }
 
+async function beginChat(ctx: Context, message: string) {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const session = getSession(chatId);
+  if (session.step === "leyendo") return;
+  if (isWaitingForUser(session)) {
+    await ctx.reply(
+      "Ya tienes un registro en revisión. Usa los botones para corregir o guardar, o escribe /salir.",
+    );
+    return;
+  }
+  const now = Date.now();
+  const previous = lastHelloAt.get(chatId) ?? 0;
+  if (now - previous < 20_000) return;
+  lastHelloAt.set(chatId, now);
+  startRegistro(chatId);
+  await ctx.reply(message);
+}
+
 async function exitChat(ctx: Context, chatId: number) {
   clearSession(chatId);
   await ctx.reply("Saliste de ChatCoyo. El registro no se guardó.\nCuando quieras empezar de nuevo, escribe /hola");
@@ -187,15 +206,6 @@ async function downloadImage(ctx: Context): Promise<Buffer | null> {
   return Buffer.from(await response.arrayBuffer());
 }
 
-function hasIneFields(data: ChatCoyoFields): boolean {
-  return Boolean(
-    data.nombre.trim() &&
-      data.apellidoPaterno.trim() &&
-      data.curp.trim() &&
-      data.seccion.trim(),
-  );
-}
-
 function isWaitingForUser(session: ChatSession): boolean {
   return session.step === "revision" || session.step === "editando";
 }
@@ -247,14 +257,13 @@ async function acceptInePhoto(ctx: Context) {
 
   if (session.step === "leyendo") return;
 
-  if (isWaitingForUser(session) && hasIneFields(session.data)) {
-    await ctx.reply(
-      "Ya tengo los datos. Usa los botones para corregir o guardar. Si quieres otra foto, toca Otra foto INE.",
-    );
-    return;
-  }
-
-  if (session.step !== "foto" && !isWaitingForUser(session)) {
+  if (session.step !== "foto") {
+    if (isWaitingForUser(session)) {
+      await ctx.reply(
+        "Ya tengo los datos. Usa los botones para corregir o guardar. Si quieres otra foto, toca Otra foto INE.",
+      );
+      return;
+    }
     await ctx.reply("Primero el celular, luego el correo y al final la foto de la INE. Escribe /hola para empezar.");
     return;
   }
@@ -285,15 +294,11 @@ function createBot(token: string): Bot {
   });
 
   bot.command("start", async (ctx) => {
-    const chatId = ctx.chat.id;
-    startRegistro(chatId);
-    await ctx.replyWithPhoto(axisLogoFile(), { caption: AXIS_START_CAPTION });
+    await beginChat(ctx, AXIS_START_CAPTION);
   });
 
   bot.command("hola", async (ctx) => {
-    const chatId = ctx.chat.id;
-    startRegistro(chatId);
-    await ctx.replyWithPhoto(axisLogoFile(), { caption: AXIS_HOLA_CAPTION });
+    await beginChat(ctx, AXIS_HOLA_CAPTION);
   });
 
   bot.command("salir", async (ctx) => {
@@ -305,9 +310,7 @@ function createBot(token: string): Bot {
   });
 
   bot.hears(/^(hola)$/i, async (ctx) => {
-    const chatId = ctx.chat.id;
-    startRegistro(chatId);
-    await ctx.replyWithPhoto(axisLogoFile(), { caption: AXIS_HOLA_SHORT_CAPTION });
+    await beginChat(ctx, AXIS_HOLA_SHORT_CAPTION);
   });
 
   bot.hears(/^(salir|cancelar)$/i, async (ctx) => {

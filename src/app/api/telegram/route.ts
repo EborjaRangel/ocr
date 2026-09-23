@@ -48,5 +48,5 @@ export async function GET(request: Request) {
     ok: false,
     description: error instanceof Error ? error.message : "No se pudo aplicar la marca AXIS",
   }));
-  return NextResponse.json({ ok: true, bot: "ChatCoyo · AXIS", webhook: data, brand });
+  return NextResponse.json({ ok: true, bot: "ChatCoyo", webhook: data, brand });
 }
