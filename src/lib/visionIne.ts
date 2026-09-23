@@ -74,9 +74,55 @@ async function toVisionJpeg(input: Buffer): Promise<Buffer> {
   return resized.jpeg({ quality: 85 }).toBuffer();
 }
 
+function textFromInteraction(payload: {
+  output_text?: string;
+  steps?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
+}): string {
+  if (payload.output_text?.trim()) return payload.output_text;
+  return (payload.steps ?? [])
+    .filter((step) => step.type === "model_output")
+    .flatMap((step) => step.content ?? [])
+    .map((part) => part.text ?? "")
+    .join("");
+}
+
 async function readWithGemini(jpeg: Buffer, apiKey: string): Promise<IneFields> {
-  const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+  const models = ["gemini-3.8-flash", "gemini-3.6-flash"];
+  const image = jpeg.toString("base64");
   let lastError = "Gemini no respondió";
+
+  for (const model of models) {
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        model,
+        input: [
+          { type: "text", text: PROMPT },
+          { type: "image", data: image, mime_type: "image/jpeg" },
+        ],
+      }),
+    });
+    const payload = (await response.json()) as {
+      error?: { message?: string };
+      output_text?: string;
+      steps?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
+    };
+    if (!response.ok) {
+      lastError = payload.error?.message ?? `Gemini ${response.status}`;
+      continue;
+    }
+    const text = textFromInteraction(payload);
+    if (!text.trim()) {
+      lastError = "Gemini no devolvió texto";
+      continue;
+    }
+    return asFields(parseJsonObject(text));
+  }
+
   for (const model of models) {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -88,7 +134,7 @@ async function readWithGemini(jpeg: Buffer, apiKey: string): Promise<IneFields> 
             {
               parts: [
                 { text: PROMPT },
-                { inline_data: { mime_type: "image/jpeg", data: jpeg.toString("base64") } },
+                { inline_data: { mime_type: "image/jpeg", data: image } },
               ],
             },
           ],
@@ -111,6 +157,7 @@ async function readWithGemini(jpeg: Buffer, apiKey: string): Promise<IneFields> 
     }
     return asFields(parseJsonObject(text));
   }
+
   throw new Error(lastError);
 }
 
