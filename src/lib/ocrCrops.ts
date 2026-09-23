@@ -4,7 +4,7 @@ import { withOcrWorker } from "./tesseractServer";
 async function recognize(
   worker: Worker,
   image: Buffer,
-  mode: number,
+  mode: PSM,
   spaces = "1",
 ): Promise<string> {
   await worker.setParameters({
