@@ -132,6 +132,18 @@ function withOfficialCheckDigit(value: string): string {
   return `${prefix}${digit}`;
 }
 
+function looksLikeCheckDigit(actual: string, official: string): boolean {
+  if (actual === official) return true;
+  const pairs: Record<string, string[]> = {
+    "0": ["O", "D", "Q"],
+    "1": ["I", "L"],
+    "2": ["Z"],
+    "5": ["S"],
+    "8": ["B"],
+  };
+  return pairs[official]?.includes(actual) ?? false;
+}
+
 function keepLastThree(value: string): string {
   if (value.length < 17) return "";
   if (value.length === 17) {
@@ -139,7 +151,12 @@ function keepLastThree(value: string): string {
     return looksLikeCurp(filled) ? filled : "";
   }
   const curp18 = value.slice(0, 18).toUpperCase();
-  return looksLikeCurp(curp18) ? curp18 : "";
+  if (!looksLikeCurp(curp18)) return "";
+  const official = withOfficialCheckDigit(curp18);
+  if (looksLikeCurp(official) && looksLikeCheckDigit(curp18[17], official[17])) {
+    return official;
+  }
+  return curp18;
 }
 
 function acceptCurp(value: string, prefixes: string[]): string {

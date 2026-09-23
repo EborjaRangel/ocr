@@ -1,3 +1,5 @@
+import fs from "fs";
+import os from "os";
 import path from "path";
 import { createWorker, type Worker } from "tesseract.js";
 
@@ -6,9 +8,11 @@ let queue: Promise<void> = Promise.resolve();
 
 async function createSharedWorker(): Promise<Worker> {
   const langPath = path.join(process.cwd(), "public", "tesseract", "lang");
+  const localLang = fs.existsSync(path.join(langPath, "spa.traineddata.gz"));
   return createWorker("spa", 1, {
-    langPath,
+    ...(localLang ? { langPath } : {}),
     gzip: true,
+    cachePath: path.join(os.tmpdir(), "tesseract-chatcoyo"),
   });
 }
 

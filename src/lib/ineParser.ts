@@ -56,6 +56,13 @@ const GARBAGE = new Set([
   "FEDERAL",
   "FEDERACION",
   "FEDERACIÓN",
+  "ESTADOS",
+  "UNIDOS",
+  "MEXICANOS",
+  "MEXICANO",
+  "CIC",
+  "OCR",
+  "INE",
 ]);
 
 function fold(text: string): string {
@@ -143,7 +150,7 @@ function surnamesOnLine(line: string): string[] {
 
 function isJunkNameLine(line: string): boolean {
   const folded = fold(line);
-  return /CREDENCIAL|INSTITUTO|NACIONAL ELECTORAL|PARA VOTAR|^PARA$|^VOTAR$|FEDERACI|MEXICO|DOMICILIO|CLAVE DE ELECTOR/.test(
+  return /CREDENCIAL|INSTITUTO|NACIONAL ELECTORAL|ESTADOS UNIDOS|MEXICANOS|PARA VOTAR|^PARA$|^VOTAR$|FEDERACI|MEXICO|DOMICILIO|CLAVE DE ELECTOR|CLAVE DE ELECT|SEXO|VIGENCIA/.test(
     folded,
   );
 }
@@ -265,6 +272,48 @@ function numberedBlocks(rawText: string, base: string, count = 2): string[] {
   return blocks;
 }
 
+function nextNameAfterLabel(
+  lines: string[],
+  start: number,
+  surname: boolean,
+): string {
+  for (let j = start; j < Math.min(start + 3, lines.length); j += 1) {
+    if (isNombreLabel(lines[j]) || isCurpLabel(lines[j]) || isSeccionLabel(lines[j])) continue;
+    if (isJunkNameLine(lines[j])) continue;
+    if (/APELLIDO|NOMBRE/.test(fold(lines[j])) && nameWords(lines[j]).length <= 2) continue;
+    const cleaned = surname ? cleanSurname(lines[j]) : cleanGivenName(lines[j]);
+    if (cleaned) return cleaned;
+  }
+  return "";
+}
+
+function extractLabeledNames(
+  lines: string[],
+): Pick<IneFields, "nombre" | "apellidoPaterno" | "apellidoMaterno"> {
+  let apellidoPaterno = "";
+  let apellidoMaterno = "";
+  let nombre = "";
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const folded = fold(lines[i]);
+    const sameLine = (label: RegExp, surname: boolean) => {
+      const leftover = folded.replace(label, "").trim();
+      if (!leftover) return "";
+      return surname ? cleanSurname(leftover) : cleanGivenName(leftover);
+    };
+
+    if (/APELLIDO PATERNO/.test(folded) && !apellidoPaterno) {
+      apellidoPaterno = sameLine(/.*APELLIDO PATERNO/, true) || nextNameAfterLabel(lines, i + 1, true);
+    } else if (/APELLIDO MATERNO/.test(folded) && !apellidoMaterno) {
+      apellidoMaterno = sameLine(/.*APELLIDO MATERNO/, true) || nextNameAfterLabel(lines, i + 1, true);
+    } else if (/\bNOMBRES?\b/.test(folded) && !/APELLIDO/.test(folded) && !nombre) {
+      nombre = sameLine(/.*NOMBRES?/, false) || nextNameAfterLabel(lines, i + 1, false);
+    }
+  }
+
+  return { nombre, apellidoPaterno, apellidoMaterno };
+}
+
 function collectNameReads(
   rawText: string,
   lines: string[],
@@ -272,14 +321,14 @@ function collectNameReads(
   const beforeCrops = linesOf(
     (rawText.split("===NOMBRES===")[0] ?? rawText).split("===CURP")[0],
   );
-  const fromFull = extractNamesFromLines(
-    beforeCrops.length ? beforeCrops : lines,
-    false,
-  );
-  const fromCrops = numberedBlocks(rawText, "NOMBRES", 2).map((block) =>
-    extractNamesFromLines(linesOf(block), true),
-  );
-  return [fromFull, ...fromCrops].filter((item) => scoreNames(item) > 0);
+  const fullLines = beforeCrops.length ? beforeCrops : lines;
+  const fromFull = extractNamesFromLines(fullLines, false);
+  const fromLabels = extractLabeledNames(fullLines);
+  const fromCrops = numberedBlocks(rawText, "NOMBRES", 2).flatMap((block) => {
+    const cropLines = linesOf(block);
+    return [extractNamesFromLines(cropLines, true), extractLabeledNames(cropLines)];
+  });
+  return [fromFull, fromLabels, ...fromCrops].filter((item) => scoreNames(item) > 0);
 }
 
 function paternoFitsCurp(apellidoPaterno: string, curp: string): boolean {

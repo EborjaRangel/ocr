@@ -1,8 +1,19 @@
-import { PSM } from "tesseract.js";
+import { PSM, type Worker } from "tesseract.js";
 import { withOcrWorker } from "./tesseractServer";
 
-const LETTERS =
-  "ABCDEFGHIJKLMNÑOPQRSTUVWXYZabcdefghijklmnñopqrstuvwxyzÁÉÍÓÚÜáéíóúü0123456789 ";
+async function recognize(
+  worker: Worker,
+  image: Buffer,
+  mode: number,
+  spaces = "1",
+): Promise<string> {
+  await worker.setParameters({
+    tessedit_pageseg_mode: mode,
+    tessedit_char_whitelist: "",
+    preserve_interword_spaces: spaces,
+  });
+  return (await worker.recognize(image)).data.text ?? "";
+}
 
 export async function recognizeIneCrops(crops: {
   full?: Buffer;
@@ -14,49 +25,25 @@ export async function recognizeIneCrops(crops: {
     const parts: string[] = [];
 
     if (crops.full) {
-      await worker.setParameters({
-        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-        tessedit_char_whitelist: LETTERS,
-        preserve_interword_spaces: "1",
-      });
-      parts.push((await worker.recognize(crops.full)).data.text ?? "");
+      parts.push(await recognize(worker, crops.full, PSM.AUTO));
     }
 
     for (let i = 0; i < crops.names.length; i += 1) {
-      await worker.setParameters({
-        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-        tessedit_char_whitelist: LETTERS,
-        preserve_interword_spaces: "1",
-      });
       parts.push(i === 0 ? "===NOMBRES===" : `===NOMBRES${i + 1}===`);
       parts.push("NOMBRE");
-      parts.push((await worker.recognize(crops.names[i])).data.text ?? "");
+      parts.push(await recognize(worker, crops.names[i], PSM.SINGLE_BLOCK));
     }
 
     for (let i = 0; i < crops.curps.length; i += 1) {
-      await worker.setParameters({
-        tessedit_pageseg_mode: PSM.SINGLE_LINE,
-        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-        preserve_interword_spaces: "0",
-      });
       parts.push(i === 0 ? "===CURP===" : `===CURP${i + 1}===`);
       parts.push("CURP");
-      parts.push((await worker.recognize(crops.curps[i])).data.text ?? "");
+      parts.push(await recognize(worker, crops.curps[i], PSM.SINGLE_LINE, "0"));
     }
 
     const seccionModes = [PSM.SPARSE_TEXT, PSM.SINGLE_BLOCK];
-    const seccionLists = [
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-      "0123456789",
-    ];
     for (let i = 0; i < crops.secciones.length; i += 1) {
-      await worker.setParameters({
-        tessedit_pageseg_mode: seccionModes[i] ?? PSM.SPARSE_TEXT,
-        tessedit_char_whitelist: seccionLists[i] ?? "0123456789",
-        preserve_interword_spaces: "1",
-      });
       parts.push(i === 0 ? "===SECCION===" : `===SECCION${i + 1}===`);
-      parts.push((await worker.recognize(crops.secciones[i])).data.text ?? "");
+      parts.push(await recognize(worker, crops.secciones[i], seccionModes[i] ?? PSM.SPARSE_TEXT));
     }
 
     return parts.join("\n");

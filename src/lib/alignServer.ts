@@ -4,7 +4,7 @@ import { CURP_ZONES, NAME_ZONES, SECCION_ZONES, type IneZone } from "./ineZones"
 const INE_WIDTH = 1600;
 const INE_HEIGHT = 1010;
 const INE_RATIO = INE_WIDTH / INE_HEIGHT;
-const MAX_CROP_SIDE = 720;
+const MAX_CROP_SIDE = 960;
 
 type CardBox = { x: number; y: number; width: number; height: number };
 
@@ -21,15 +21,16 @@ function saturation(r: number, g: number, b: number): number {
 function isInePaper(r: number, g: number, b: number): boolean {
   const y = luma(r, g, b);
   const sat = saturation(r, g, b);
-  return (
+  const cream =
     y >= 140 &&
-    y <= 238 &&
-    sat >= 0.035 &&
-    sat <= 0.42 &&
-    r > 135 &&
-    r + 10 >= g &&
-    g + 8 >= b
-  );
+    y <= 242 &&
+    sat >= 0.025 &&
+    sat <= 0.48 &&
+    r > 128 &&
+    r + 14 >= g &&
+    g + 14 >= b;
+  const pearl = y >= 160 && y <= 252 && sat <= 0.3 && Math.min(r, g, b) > 140;
+  return cream || pearl;
 }
 
 function isCardContent(r: number, g: number, b: number): boolean {
@@ -144,14 +145,23 @@ export async function orientationTurns(input: Buffer): Promise<number[]> {
   const meta = await sharp(input).rotate().metadata();
   const width = meta.width ?? 0;
   const height = meta.height ?? 0;
-  return height > width ? [90, 270] : [0, 180];
+  return height > width ? [90, 270, 0, 180] : [0, 180, 90, 270];
+}
+
+export async function prepareIneInput(input: Buffer): Promise<Buffer> {
+  const oriented = sharp(input).rotate();
+  const meta = await oriented.metadata();
+  const width = meta.width ?? 0;
+  const longest = Math.max(width, meta.height ?? 0);
+  const pipeline = longest < 1400 ? oriented.resize({ width: Math.round(width * (1400 / Math.max(1, longest))), withoutEnlargement: false }) : oriented;
+  return pipeline.png().toBuffer();
 }
 
 export async function alignIneBuffer(input: Buffer, extraRotate = 0): Promise<Buffer> {
   let image = sharp(input).rotate();
   if (extraRotate) image = image.rotate(extraRotate);
 
-  const oriented = await image.jpeg({ quality: 92 }).toBuffer();
+  const oriented = await image.png().toBuffer();
   const orientedMeta = await sharp(oriented).metadata();
   const srcW = orientedMeta.width ?? 0;
   const srcH = orientedMeta.height ?? 0;
@@ -169,8 +179,21 @@ export async function alignIneBuffer(input: Buffer, extraRotate = 0): Promise<Bu
       width: Math.max(8, Math.floor(box.width)),
       height: Math.max(8, Math.floor(box.height)),
     })
-    .resize(INE_WIDTH, INE_HEIGHT, { fit: "fill" })
-    .jpeg({ quality: 92 })
+    .resize(INE_WIDTH, INE_HEIGHT, {
+      fit: "contain",
+      background: { r: 255, g: 255, b: 255 },
+    })
+    .png()
+    .toBuffer();
+}
+
+export async function enhanceForOcr(input: Buffer): Promise<Buffer> {
+  return sharp(input)
+    .grayscale()
+    .normalize()
+    .sharpen({ sigma: 1.05 })
+    .modulate({ brightness: 1.06 })
+    .png()
     .toBuffer();
 }
 
@@ -188,11 +211,16 @@ async function cropZone(aligned: Buffer, zone: IneZone, imageW: number, imageH: 
     outH = Math.max(8, Math.round(outH * fit));
   }
 
-  let pipeline = sharp(aligned).extract({ left, top, width, height }).resize(outW, outH);
+  let pipeline = sharp(aligned)
+    .extract({ left, top, width, height })
+    .resize(outW, outH)
+    .grayscale()
+    .normalize()
+    .sharpen({ sigma: 0.9 });
   if (zone.contrast) {
-    pipeline = pipeline.normalize().modulate({ brightness: 1.06 });
+    pipeline = pipeline.linear(1.28, -24);
   }
-  return pipeline.jpeg({ quality: 85 }).toBuffer();
+  return pipeline.png().toBuffer();
 }
 
 export async function cropIneZones(aligned: Buffer): Promise<{

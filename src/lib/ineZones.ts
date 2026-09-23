@@ -10,16 +10,16 @@ export type IneZone = {
 export const OCR_READS = 2;
 
 export const NAME_ZONES: IneZone[] = [
-  { left: 0.26, top: 0.06, right: 0.88, bottom: 0.5, scale: 1.35 },
-  { left: 0.29, top: 0.1, right: 0.84, bottom: 0.46, scale: 1.5, contrast: true },
+  { left: 0.2, top: 0.04, right: 0.94, bottom: 0.54, scale: 1.45 },
+  { left: 0.26, top: 0.08, right: 0.88, bottom: 0.48, scale: 1.6, contrast: true },
 ];
 
 export const CURP_ZONES: IneZone[] = [
-  { left: 0.24, top: 0.42, right: 0.84, bottom: 0.7, scale: 1.5 },
-  { left: 0.28, top: 0.48, right: 0.8, bottom: 0.66, scale: 1.7, contrast: true },
+  { left: 0.2, top: 0.36, right: 0.9, bottom: 0.74, scale: 1.55 },
+  { left: 0.26, top: 0.44, right: 0.84, bottom: 0.68, scale: 1.8, contrast: true },
 ];
 
 export const SECCION_ZONES: IneZone[] = [
-  { left: 0.58, top: 0.42, right: 0.99, bottom: 0.86, scale: 1.4 },
-  { left: 0.66, top: 0.48, right: 0.99, bottom: 0.78, scale: 1.6, contrast: true },
+  { left: 0.5, top: 0.36, right: 0.995, bottom: 0.9, scale: 1.5 },
+  { left: 0.62, top: 0.44, right: 0.995, bottom: 0.82, scale: 1.75, contrast: true },
 ];

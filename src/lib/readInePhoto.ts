@@ -1,4 +1,10 @@
-import { alignIneBuffer, cropIneZones, orientationTurns } from "./alignServer";
+import {
+  alignIneBuffer,
+  cropIneZones,
+  enhanceForOcr,
+  orientationTurns,
+  prepareIneInput,
+} from "./alignServer";
 import { hasAnyIneData, parseIneText } from "./ineParser";
 import { recognizeIneCrops } from "./ocrCrops";
 import type { IneFields } from "./types";
@@ -14,12 +20,46 @@ function scoreFields(fields: IneFields): number {
   return score;
 }
 
-async function readAlignedCard(aligned: Buffer, includeFull: boolean): Promise<IneFields> {
-  const crops = await cropIneZones(aligned);
+function pickField(current: string, next: string): string {
+  if (!current) return next;
+  if (!next) return current;
+  return current;
+}
+
+function mergeFields(current: IneFields, next: IneFields): IneFields {
+  if (scoreFields(next) > scoreFields(current) && next.curp) {
+    return {
+      nombre: next.nombre || current.nombre,
+      apellidoPaterno: next.apellidoPaterno || current.apellidoPaterno,
+      apellidoMaterno: next.apellidoMaterno || current.apellidoMaterno,
+      curp: next.curp,
+      seccion: next.seccion || current.seccion,
+    };
+  }
+  return {
+    nombre: pickField(current.nombre, next.nombre),
+    apellidoPaterno: pickField(current.apellidoPaterno, next.apellidoPaterno),
+    apellidoMaterno: pickField(current.apellidoMaterno, next.apellidoMaterno),
+    curp: current.curp || next.curp,
+    seccion: current.seccion || next.seccion,
+  };
+}
+
+async function readFull(aligned: Buffer): Promise<IneFields> {
+  const enhanced = await enhanceForOcr(aligned);
   const text = await recognizeIneCrops({
-    full: includeFull ? aligned : undefined,
-    ...crops,
+    full: enhanced,
+    names: [],
+    curps: [],
+    secciones: [],
   });
+  return { ...EMPTY_INE_FIELDS, ...parseIneText(text) };
+}
+
+async function readCrops(aligned: Buffer): Promise<IneFields> {
+  const enhanced = await enhanceForOcr(aligned);
+  const crops = await cropIneZones(enhanced);
+  const text = await recognizeIneCrops(crops);
   return { ...EMPTY_INE_FIELDS, ...parseIneText(text) };
 }
 
@@ -27,23 +67,43 @@ export async function readInePhoto(input: Buffer): Promise<{
   fields: IneFields;
   foundData: boolean;
 }> {
-  const turns = await orientationTurns(input);
+  const prepared = await prepareIneInput(input);
+  const turns = await orientationTurns(prepared);
   let best = { ...EMPTY_INE_FIELDS };
-  let bestScore = -1;
+  let bestAligned: Buffer | null = null;
+  let bestAlignedScore = -1;
 
   for (let i = 0; i < turns.length; i += 1) {
-    const aligned = await alignIneBuffer(input, turns[i]);
-    const fields = await readAlignedCard(aligned, i === 0);
-    const score = scoreFields(fields);
-    if (score > bestScore) {
-      best = fields;
-      bestScore = score;
+    const aligned = await alignIneBuffer(prepared, turns[i]);
+    const fields = await readFull(aligned);
+    const turnScore = scoreFields(fields);
+    best = mergeFields(best, fields);
+    if (turnScore > bestAlignedScore) {
+      bestAligned = aligned;
+      bestAlignedScore = turnScore;
     }
-    if (bestScore >= 12) break;
+    console.log("ChatCoyo OCR full", {
+      turn: turns[i],
+      score: scoreFields(best),
+      curp: Boolean(best.curp),
+      seccion: Boolean(best.seccion),
+    });
+    if (scoreFields(best) >= 12) break;
+    if (i === 1 && scoreFields(best) > 0) break;
+  }
+
+  if (scoreFields(best) < 12 && bestAligned) {
+    const cropped = await readCrops(bestAligned);
+    best = mergeFields(best, cropped);
+    console.log("ChatCoyo OCR crops", {
+      score: scoreFields(best),
+      curp: Boolean(best.curp),
+      seccion: Boolean(best.seccion),
+    });
   }
 
   return {
     fields: best,
-    foundData: hasAnyIneData(best) || bestScore > 0,
+    foundData: hasAnyIneData(best) || scoreFields(best) > 0,
   };
 }
