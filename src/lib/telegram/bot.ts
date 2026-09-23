@@ -82,12 +82,15 @@ function show(value: string): string {
 
 const MENU_VER = "Ver mis registros";
 const MENU_ALTA = "Dar de alta un nuevo registro";
+const MENU_SALIR = "Salir del ChatCoyo";
 
 function mainMenuKeyboard() {
   return new InlineKeyboard()
     .text(MENU_VER, "menu:ver")
     .row()
-    .text(MENU_ALTA, "menu:alta");
+    .text(MENU_ALTA, "menu:alta")
+    .row()
+    .text(MENU_SALIR, "menu:salir");
 }
 
 function mainReplyKeyboard() {
@@ -95,12 +98,14 @@ function mainReplyKeyboard() {
     .text(MENU_VER)
     .row()
     .text(MENU_ALTA)
+    .row()
+    .text(MENU_SALIR)
     .resized()
     .persistent();
 }
 
 function isMenuText(text: string): boolean {
-  return new RegExp(`^(${MENU_VER}|${MENU_ALTA})$`, "i").test(text.trim());
+  return new RegExp(`^(${MENU_VER}|${MENU_ALTA}|${MENU_SALIR})$`, "i").test(text.trim());
 }
 
 function reviewKeyboard() {
@@ -120,7 +125,7 @@ function reviewKeyboard() {
     .text("Sección", "e:seccion")
     .text("Otra foto INE", "foto")
     .row()
-    .text("Salir", "salir");
+    .text(MENU_SALIR, "salir");
 }
 
 function summaryText(data: ChatCoyoFields): string {
@@ -201,15 +206,19 @@ async function handleMenuChoice(ctx: Context, choice: string) {
   }
   if (/^menu:alta$/i.test(choice) || choice.toLowerCase() === MENU_ALTA.toLowerCase()) {
     await startAlta(ctx);
+    return;
+  }
+  if (/^menu:salir$/i.test(choice) || choice.toLowerCase() === MENU_SALIR.toLowerCase()) {
+    const chatId = ctx.chat?.id;
+    if (chatId) await exitChat(ctx, chatId);
   }
 }
 
 async function exitChat(ctx: Context, chatId: number) {
   clearSession(chatId);
-  await showMainMenu(
-    ctx,
-    "Saliste de ChatCoyo. El registro no se guardó.",
-  );
+  await ctx.reply("Saliste de ChatCoyo. El registro no se guardó.\nCuando quieras volver, escribe /hola", {
+    reply_markup: { remove_keyboard: true },
+  });
 }
 
 function normalizeField(field: EditableField, raw: string): { value: string; error?: string } {
@@ -390,7 +399,7 @@ function createBot(token: string): Bot {
     const data = ctx.callbackQuery.data;
     await ctx.answerCallbackQuery();
 
-    if (data === "menu:ver" || data === "menu:alta") {
+    if (data === "menu:ver" || data === "menu:alta" || data === "menu:salir") {
       await handleMenuChoice(ctx, data);
       return;
     }
