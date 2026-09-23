@@ -1,9 +1,6 @@
 import { InputFile } from "grammy";
-import { AXIS_ICON_JPEG_BASE64, AXIS_LOGO_JPEG_BASE64 } from "./axisLogoData";
-
-export function axisIconBuffer(): Buffer {
-  return Buffer.from(AXIS_ICON_JPEG_BASE64, "base64");
-}
+import sharp from "sharp";
+import { AXIS_LOGO_JPEG_BASE64 } from "./axisLogoData";
 
 export function axisLogoBuffer(): Buffer {
   return Buffer.from(AXIS_LOGO_JPEG_BASE64, "base64");
@@ -11,6 +8,25 @@ export function axisLogoBuffer(): Buffer {
 
 export function axisLogoFile() {
   return new InputFile(axisLogoBuffer(), "axis-logo.jpg");
+}
+
+export async function axisProfilePhotoBuffer(): Promise<Buffer> {
+  const size = 1024;
+  const wordmark = await sharp(axisLogoBuffer())
+    .resize({ width: 860, height: 320, fit: "inside" })
+    .png()
+    .toBuffer();
+  return sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 3,
+      background: { r: 255, g: 255, b: 255 },
+    },
+  })
+    .composite([{ input: wordmark, gravity: "center" }])
+    .jpeg({ quality: 92 })
+    .toBuffer();
 }
 
 export const AXIS_START_CAPTION =
@@ -23,7 +39,10 @@ export const AXIS_HOLA_SHORT_CAPTION =
   "Hola, soy ChatCoyo. ¿Cuál es tu celular a 10 dígitos?";
 
 export async function setAxisProfilePhoto(token: string): Promise<{ ok: boolean; description?: string }> {
-  const jpeg = axisIconBuffer();
+  await fetch(`https://api.telegram.org/bot${token}/deleteMyProfilePhoto`, {
+    method: "POST",
+  });
+  const jpeg = await axisProfilePhotoBuffer();
   const form = new FormData();
   form.append(
     "photo",
