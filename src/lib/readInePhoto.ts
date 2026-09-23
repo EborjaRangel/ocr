@@ -1,4 +1,4 @@
-import { alignIneBuffer, cropIneZones, flipAligned } from "./alignServer";
+import { alignIneBuffer, cropIneZones, orientationTurns } from "./alignServer";
 import { hasAnyIneData, parseIneText } from "./ineParser";
 import { recognizeIneCrops } from "./ocrCrops";
 import type { IneFields } from "./types";
@@ -27,18 +27,23 @@ export async function readInePhoto(input: Buffer): Promise<{
   fields: IneFields;
   foundData: boolean;
 }> {
-  const aligned = await alignIneBuffer(input);
-  const first = await readAlignedCard(aligned, true);
-  const firstScore = scoreFields(first);
+  const turns = await orientationTurns(input);
+  let best = { ...EMPTY_INE_FIELDS };
+  let bestScore = -1;
 
-  if (firstScore >= 12) {
-    return { fields: first, foundData: true };
+  for (let i = 0; i < turns.length; i += 1) {
+    const aligned = await alignIneBuffer(input, turns[i]);
+    const fields = await readAlignedCard(aligned, i === 0);
+    const score = scoreFields(fields);
+    if (score > bestScore) {
+      best = fields;
+      bestScore = score;
+    }
+    if (bestScore >= 12) break;
   }
 
-  const flipped = await readAlignedCard(await flipAligned(aligned), false);
-  const fields = scoreFields(flipped) > firstScore ? flipped : first;
   return {
-    fields,
-    foundData: hasAnyIneData(fields) || scoreFields(fields) > 0,
+    fields: best,
+    foundData: hasAnyIneData(best) || bestScore > 0,
   };
 }

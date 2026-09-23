@@ -57,7 +57,9 @@ function reviewKeyboard() {
     .text("CURP", "e:curp")
     .row()
     .text("Sección", "e:seccion")
-    .text("Otra foto INE", "foto");
+    .text("Otra foto INE", "foto")
+    .row()
+    .text("Salir", "salir");
 }
 
 function summaryText(data: ChatCoyoFields): string {
@@ -84,6 +86,11 @@ async function showReview(ctx: Context, session: ChatSession) {
 
 function startRegistro(chatId: number): ChatSession {
   return resetSession(chatId);
+}
+
+async function exitChat(ctx: Context, chatId: number) {
+  clearSession(chatId);
+  await ctx.reply("Saliste de ChatCoyo. El registro no se guardó.\nCuando quieras empezar de nuevo, escribe /hola");
 }
 
 function normalizeField(field: EditableField, raw: string): { value: string; error?: string } {
@@ -167,7 +174,7 @@ function createBot(token: string): Bot {
     const chatId = ctx.chat.id;
     startRegistro(chatId);
     await ctx.reply(
-      "Hola, soy ChatCoyo. Voy a pedirte celular, correo y una foto de tu INE.\n\n¿Cuál es tu celular a 10 dígitos?",
+      "Hola, soy ChatCoyo. Voy a pedirte celular, correo y una foto de tu INE (puede ser vertical u horizontal).\n\nSi quieres cancelar, escribe /salir.\n\n¿Cuál es tu celular a 10 dígitos?",
     );
   });
 
@@ -175,16 +182,28 @@ function createBot(token: string): Bot {
     const chatId = ctx.chat.id;
     startRegistro(chatId);
     await ctx.reply(
-      "Hola, soy ChatCoyo. ¿Cuál es tu celular a 10 dígitos?",
+      "Hola, soy ChatCoyo. La foto de la INE puede ir vertical u horizontal.\nSi quieres cancelar, escribe /salir.\n\n¿Cuál es tu celular a 10 dígitos?",
     );
   });
 
-  bot.hears(/^hola$/i, async (ctx) => {
+  bot.command("salir", async (ctx) => {
+    await exitChat(ctx, ctx.chat.id);
+  });
+
+  bot.command("cancelar", async (ctx) => {
+    await exitChat(ctx, ctx.chat.id);
+  });
+
+  bot.hears(/^(hola)$/i, async (ctx) => {
     const chatId = ctx.chat.id;
     startRegistro(chatId);
     await ctx.reply(
       "Hola, soy ChatCoyo. ¿Cuál es tu celular a 10 dígitos?",
     );
+  });
+
+  bot.hears(/^(salir|cancelar)$/i, async (ctx) => {
+    await exitChat(ctx, ctx.chat.id);
   });
 
   bot.on("callback_query:data", async (ctx) => {
@@ -211,6 +230,11 @@ function createBot(token: string): Bot {
         );
         await showReview(ctx, session);
       }
+      return;
+    }
+
+    if (data === "salir") {
+      await exitChat(ctx, chatId);
       return;
     }
 
@@ -263,7 +287,7 @@ function createBot(token: string): Bot {
 
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text.trim();
-    if (/^\/?(hola|start)$/i.test(text)) return;
+    if (/^\/?(hola|start|salir|cancelar)$/i.test(text)) return;
     const session = getSession(ctx.chat.id);
 
     if (session.step === "celular") {
@@ -287,7 +311,7 @@ function createBot(token: string): Bot {
       session.data.correo = parsed.value;
       session.step = "foto";
       await ctx.reply(
-        "Manda una foto de tu INE. Que se vea nítida, sin flash y con el nombre hacia arriba.",
+        "Manda una foto de tu INE, vertical u horizontal. Que se vea nítida y sin flash. Para cancelar, /salir",
       );
       return;
     }

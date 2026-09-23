@@ -140,20 +140,21 @@ async function findCardBounds(input: Buffer, srcW: number, srcH: number): Promis
   return { x, y, width, height };
 }
 
-export async function alignIneBuffer(input: Buffer): Promise<Buffer> {
+export async function orientationTurns(input: Buffer): Promise<number[]> {
+  const meta = await sharp(input).rotate().metadata();
+  const width = meta.width ?? 0;
+  const height = meta.height ?? 0;
+  return height > width ? [90, 270] : [0, 180];
+}
+
+export async function alignIneBuffer(input: Buffer, extraRotate = 0): Promise<Buffer> {
   let image = sharp(input).rotate();
-  const meta = await image.metadata();
-  let width = meta.width ?? 0;
-  let height = meta.height ?? 0;
-  if (height > width) {
-    image = image.rotate(90);
-    [width, height] = [height, width];
-  }
+  if (extraRotate) image = image.rotate(extraRotate);
 
   const oriented = await image.jpeg({ quality: 92 }).toBuffer();
   const orientedMeta = await sharp(oriented).metadata();
-  const srcW = orientedMeta.width ?? width;
-  const srcH = orientedMeta.height ?? height;
+  const srcW = orientedMeta.width ?? 0;
+  const srcH = orientedMeta.height ?? 0;
   const box = (await findCardBounds(oriented, srcW, srcH)) ?? {
     x: 0,
     y: 0,
@@ -171,10 +172,6 @@ export async function alignIneBuffer(input: Buffer): Promise<Buffer> {
     .resize(INE_WIDTH, INE_HEIGHT, { fit: "fill" })
     .jpeg({ quality: 92 })
     .toBuffer();
-}
-
-export async function flipAligned(aligned: Buffer): Promise<Buffer> {
-  return sharp(aligned).rotate(180).jpeg({ quality: 92 }).toBuffer();
 }
 
 async function cropZone(aligned: Buffer, zone: IneZone, imageW: number, imageH: number): Promise<Buffer> {
