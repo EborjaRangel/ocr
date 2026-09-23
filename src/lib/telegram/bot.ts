@@ -181,10 +181,30 @@ async function downloadImage(ctx: Context): Promise<Buffer | null> {
   return Buffer.from(await response.arrayBuffer());
 }
 
-async function readPhotoAndReview(ctx: Context, session: ChatSession, image: Buffer) {
+function hasIneFields(data: ChatCoyoFields): boolean {
+  return Boolean(
+    data.nombre.trim() &&
+      data.apellidoPaterno.trim() &&
+      data.curp.trim() &&
+      data.seccion.trim(),
+  );
+}
+
+function isWaitingForUser(session: ChatSession): boolean {
+  return session.step === "revision" || session.step === "editando";
+}
+
+async function readPhotoAndReview(
+  ctx: Context,
+  session: ChatSession,
+  image: Buffer,
+  gen: number,
+) {
   session.step = "leyendo";
   try {
     const result = await readInePhoto(image);
+    if (session.readGen !== gen) return;
+    if (isWaitingForUser(session)) return;
     session.data = { ...session.data, ...result.fields };
     if (!result.foundData) {
       await ctx.reply(
@@ -193,6 +213,7 @@ async function readPhotoAndReview(ctx: Context, session: ChatSession, image: Buf
     }
     await showReview(ctx, session);
   } catch (error) {
+    if (session.readGen !== gen || isWaitingForUser(session)) return;
     session.step = "foto";
     await ctx.reply(
       error instanceof Error
@@ -215,25 +236,38 @@ async function acceptInePhoto(ctx: Context) {
   const chatId = ctx.chat?.id;
   if (!chatId) return;
   const session = getSession(chatId);
+  const fileId = photoFileId(ctx);
+  if (fileId && alreadyReadingFile(fileId)) return;
+
   if (session.step === "leyendo") return;
-  if (session.step !== "foto" && session.step !== "revision") {
+
+  if (isWaitingForUser(session) && hasIneFields(session.data)) {
+    await ctx.reply(
+      "Ya tengo los datos. Usa los botones para corregir o guardar. Si quieres otra foto, toca Otra foto INE.",
+    );
+    return;
+  }
+
+  if (session.step !== "foto" && !isWaitingForUser(session)) {
     await ctx.reply("Primero el celular, luego el correo y al final la foto de la INE. Escribe /hola para empezar.");
     return;
   }
-  const fileId = photoFileId(ctx);
-  if (fileId && alreadyReadingFile(fileId)) return;
+
   const image = await downloadImage(ctx);
   if (!image) {
     await ctx.reply("No pude bajar la foto. Inténtalo otra vez.");
     return;
   }
+  session.readGen += 1;
+  const gen = session.readGen;
+  session.lastFileId = fileId;
   session.step = "leyendo";
   await ctx.reply(
     hasVisionOcr()
       ? "Leyendo la INE con el modelo de visión. Espera un momento…"
       : "Leyendo la credencial INE. Espera un momento…",
   );
-  void readPhotoAndReview(ctx, session, image);
+  void readPhotoAndReview(ctx, session, image, gen);
 }
 
 function createBot(token: string): Bot {
@@ -320,6 +354,10 @@ function createBot(token: string): Bot {
     if (data === "foto") {
       session.step = "foto";
       session.editing = undefined;
+      if (session.lastFileId) {
+        seenFiles.delete(session.lastFileId);
+        session.lastFileId = undefined;
+      }
       await ctx.reply(
         "Manda otra foto de la INE, nítida, sin flash, con el nombre hacia arriba.",
       );

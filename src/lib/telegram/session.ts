@@ -9,20 +9,26 @@ export type ChatSession = {
   step: ChatStep;
   editing?: EditableField;
   data: ChatCoyoFields;
+  readGen: number;
+  lastFileId?: string;
 };
 
 const sessions = new Map<number, ChatSession>();
 
+function emptySession(step: ChatStep): ChatSession {
+  return { step, data: { ...EMPTY_CHAT_FIELDS }, readGen: 0 };
+}
+
 export function getSession(chatId: number): ChatSession {
   const current = sessions.get(chatId);
   if (current) return current;
-  const created: ChatSession = { step: "idle", data: { ...EMPTY_CHAT_FIELDS } };
+  const created = emptySession("idle");
   sessions.set(chatId, created);
   return created;
 }
 
 export function resetSession(chatId: number): ChatSession {
-  const created: ChatSession = { step: "celular", data: { ...EMPTY_CHAT_FIELDS } };
+  const created = emptySession("celular");
   sessions.set(chatId, created);
   return created;
 }
