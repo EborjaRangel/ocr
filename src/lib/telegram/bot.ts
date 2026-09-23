@@ -49,7 +49,6 @@ const FIELD_HINTS: Record<EditableField, string> = {
 let botInstance: Bot | null = null;
 const seenUpdates = new Map<number, number>();
 const seenFiles = new Map<string, number>();
-const lastHelloAt = new Map<number, number>();
 
 function alreadyHandled(id: number, ttlMs = 10 * 60 * 1000): boolean {
   const now = Date.now();
@@ -125,19 +124,9 @@ function startRegistro(chatId: number): ChatSession {
 async function beginChat(ctx: Context, message: string) {
   const chatId = ctx.chat?.id;
   if (!chatId) return;
-  const session = getSession(chatId);
-  if (session.step === "leyendo") return;
-  if (isWaitingForUser(session)) {
-    await ctx.reply(
-      "Ya tienes un registro en revisión. Usa los botones para corregir o guardar, o escribe /salir.",
-    );
-    return;
-  }
-  const now = Date.now();
-  const previous = lastHelloAt.get(chatId) ?? 0;
-  if (now - previous < 20_000) return;
-  lastHelloAt.set(chatId, now);
-  startRegistro(chatId);
+  const session = startRegistro(chatId);
+  session.readGen += 1;
+  session.lastFileId = undefined;
   await ctx.reply(message);
 }
 
