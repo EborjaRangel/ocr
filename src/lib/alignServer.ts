@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import type { IneTemplate } from "./ineTemplates";
 import { CURP_ZONES, NAME_ZONES, SECCION_ZONES, type IneZone } from "./ineZones";
 
 const INE_WIDTH = 1600;
@@ -190,11 +191,47 @@ export async function alignIneBuffer(input: Buffer, extraRotate = 0): Promise<Bu
 export async function enhanceForOcr(input: Buffer): Promise<Buffer> {
   return sharp(input)
     .grayscale()
+    .median(3)
     .normalize()
-    .sharpen({ sigma: 1.05 })
-    .modulate({ brightness: 1.06 })
+    .sharpen({ sigma: 1.1 })
+    .linear(1.18, -16)
     .png()
     .toBuffer();
+}
+
+export async function cropHeaderStrip(aligned: Buffer): Promise<Buffer> {
+  const meta = await sharp(aligned).metadata();
+  const imageW = meta.width ?? INE_WIDTH;
+  const imageH = meta.height ?? INE_HEIGHT;
+  return cropZone(
+    aligned,
+    { left: 0.06, top: 0.015, right: 0.94, bottom: 0.22, scale: 1.25 },
+    imageW,
+    imageH,
+  );
+}
+
+export async function cropPixelBox(
+  aligned: Buffer,
+  box: { x: number; y: number; width: number; height: number },
+  contrast = true,
+): Promise<Buffer> {
+  const meta = await sharp(aligned).metadata();
+  const imageW = meta.width ?? INE_WIDTH;
+  const imageH = meta.height ?? INE_HEIGHT;
+  const left = Math.max(0, Math.floor(box.x));
+  const top = Math.max(0, Math.floor(box.y));
+  const width = Math.max(8, Math.min(imageW - left, Math.floor(box.width)));
+  const height = Math.max(8, Math.min(imageH - top, Math.floor(box.height)));
+  let pipeline = sharp(aligned)
+    .extract({ left, top, width, height })
+    .resize(Math.min(960, width * 2), Math.min(480, height * 2), { fit: "inside" })
+    .grayscale()
+    .median(3)
+    .normalize()
+    .sharpen({ sigma: 1 });
+  if (contrast) pipeline = pipeline.linear(1.32, -28);
+  return pipeline.png().toBuffer();
 }
 
 async function cropZone(aligned: Buffer, zone: IneZone, imageW: number, imageH: number): Promise<Buffer> {
@@ -215,6 +252,7 @@ async function cropZone(aligned: Buffer, zone: IneZone, imageW: number, imageH: 
     .extract({ left, top, width, height })
     .resize(outW, outH)
     .grayscale()
+    .median(3)
     .normalize()
     .sharpen({ sigma: 0.9 });
   if (zone.contrast) {
@@ -223,7 +261,10 @@ async function cropZone(aligned: Buffer, zone: IneZone, imageW: number, imageH: 
   return pipeline.png().toBuffer();
 }
 
-export async function cropIneZones(aligned: Buffer): Promise<{
+export async function cropIneZones(
+  aligned: Buffer,
+  template?: IneTemplate,
+): Promise<{
   names: Buffer[];
   curps: Buffer[];
   secciones: Buffer[];
@@ -231,10 +272,13 @@ export async function cropIneZones(aligned: Buffer): Promise<{
   const meta = await sharp(aligned).metadata();
   const imageW = meta.width ?? INE_WIDTH;
   const imageH = meta.height ?? INE_HEIGHT;
+  const namesZones = template?.names ?? NAME_ZONES;
+  const curpZones = template?.curps ?? CURP_ZONES;
+  const seccionZones = template?.secciones ?? SECCION_ZONES;
   const [names, curps, secciones] = await Promise.all([
-    Promise.all(NAME_ZONES.map((zone) => cropZone(aligned, zone, imageW, imageH))),
-    Promise.all(CURP_ZONES.map((zone) => cropZone(aligned, zone, imageW, imageH))),
-    Promise.all(SECCION_ZONES.map((zone) => cropZone(aligned, zone, imageW, imageH))),
+    Promise.all(namesZones.map((zone) => cropZone(aligned, zone, imageW, imageH))),
+    Promise.all(curpZones.map((zone) => cropZone(aligned, zone, imageW, imageH))),
+    Promise.all(seccionZones.map((zone) => cropZone(aligned, zone, imageW, imageH))),
   ]);
   return { names, curps, secciones };
 }

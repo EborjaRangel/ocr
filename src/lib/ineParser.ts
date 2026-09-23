@@ -1,4 +1,5 @@
 import { seccionCandidatesInText, tokensCoyoacanEnTexto } from "./coyoacanSeccion";
+import { isFourDigitSeccion } from "./validateSeccion";
 import { confirmCurpReads, extractAllValidCurps, prefixesFromPaterno } from "./curp";
 import type { IneFields } from "./types";
 import { EMPTY_INE_FIELDS } from "./types";
@@ -415,10 +416,9 @@ function birthYearFromCurp(curp: string): Set<string> {
 
 function isAllowedSeccion(value: string, blocked: Set<string>): boolean {
   return (
-    Boolean(value) &&
+    isFourDigitSeccion(value) &&
     !isYear(value) &&
-    !blocked.has(value) &&
-    !["0001", "0009", "0014"].includes(value)
+    !blocked.has(value)
   );
 }
 
@@ -501,10 +501,17 @@ function collectSeccionReads(raw: string, blocked: Set<string>): {
     bucket.push(value);
   };
 
+  const template = blockAfter(raw, "===ZONASECCION===");
+  for (const token of seccionFromDigitCrop(template, blocked)) {
+    take(token, immediate, true);
+  }
+  take(seccionAfterLabelInRaw(template, blocked), immediate, true);
+  take(extractSeccionFromLines(linesOf(template), blocked), immediate, true);
+
   const fullText = raw.split("===NOMBRES===")[0] ?? raw;
-  take(seccionAfterLabelInRaw(fullText, blocked), immediate, true);
-  take(extractSeccionFromLines(linesOf(fullText), blocked), immediate, true);
-  take(seccionFromCoyoacanGrid(fullText, blocked), immediate, true);
+  take(seccionAfterLabelInRaw(fullText, blocked), labeled, true);
+  take(extractSeccionFromLines(linesOf(fullText), blocked), labeled, true);
+  take(seccionFromCoyoacanGrid(fullText, blocked), labeled, true);
 
   for (const block of numberedBlocks(raw, "SECCION", 2)) {
     take(seccionAfterLabelInRaw(block, blocked), labeled);
@@ -526,7 +533,8 @@ function extractSeccionFromRaw(raw: string, curp: string): string {
     confirmVotes(labeled, 1) ||
     confirmVotes(crops, 2) ||
     confirmVotes(crops, 1);
-  return voted ? voted.padStart(4, "0") : "";
+  const seccion = voted ? voted.padStart(4, "0") : "";
+  return isFourDigitSeccion(seccion) ? seccion : "";
 }
 
 export function parseIneText(rawText: string): IneFields {
