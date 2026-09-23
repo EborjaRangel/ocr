@@ -40,6 +40,8 @@ export function RegistrosTable({ registros, loading }: RegistrosTableProps) {
         <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
           <tr>
             <th className="px-3 py-3 font-semibold">Fecha</th>
+            <th className="px-3 py-3 font-semibold">Celular</th>
+            <th className="px-3 py-3 font-semibold">Correo</th>
             <th className="px-3 py-3 font-semibold">Nombre</th>
             <th className="px-3 py-3 font-semibold">Apellido paterno</th>
             <th className="px-3 py-3 font-semibold">Apellido materno</th>
@@ -52,6 +54,12 @@ export function RegistrosTable({ registros, loading }: RegistrosTableProps) {
             <tr key={`${registro.curp}-${registro.fecha}-${index}`}>
               <td className="whitespace-nowrap px-3 py-3 text-stone-500">
                 {formatFecha(registro.fecha)}
+              </td>
+              <td className="whitespace-nowrap px-3 py-3 text-stone-800">
+                {registro.celular || "—"}
+              </td>
+              <td className="px-3 py-3 text-stone-800">
+                {registro.correo || "—"}
               </td>
               <td className="px-3 py-3 font-medium text-stone-900">
                 {registro.nombre}

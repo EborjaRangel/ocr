@@ -1,4 +1,4 @@
-import { cropRegion } from "./alignImage";
+import { cropFieldZones } from "./alignImage";
 import { hasAnyIneData, parseIneText } from "./ineParser";
 import { CURP_ZONES, NAME_ZONES, SECCION_ZONES } from "./ineZones";
 import type { IneFields, OcrProgress } from "./types";
@@ -79,7 +79,7 @@ async function ocrInBrowser(
 
   try {
     const names: string[] = [];
-    const nameModes = [PSM.SINGLE_COLUMN, PSM.SINGLE_BLOCK];
+    const nameModes = [PSM.SINGLE_BLOCK, PSM.SINGLE_BLOCK];
     for (let i = 0; i < images.names.length; i += 1) {
       await worker.setParameters({
         tessedit_pageseg_mode: nameModes[i] ?? PSM.SINGLE_COLUMN,
@@ -89,7 +89,7 @@ async function ocrInBrowser(
     }
 
     const curps: string[] = [];
-    const curpModes = [PSM.SPARSE_TEXT, PSM.SINGLE_LINE];
+    const curpModes = [PSM.SINGLE_LINE, PSM.SINGLE_LINE];
     for (let i = 0; i < images.curps.length; i += 1) {
       await worker.setParameters({
         tessedit_pageseg_mode: curpModes[i] ?? PSM.SPARSE_TEXT,
@@ -114,7 +114,7 @@ async function ocrInBrowser(
       secciones.push((await worker.recognize(images.secciones[i])).data.text ?? "");
     }
 
-      return assembleOcrText({ fullText: "", names, curps, secciones });
+    return assembleOcrText({ fullText: "", names, curps, secciones });
   } finally {
     await worker.terminate();
   }
@@ -124,30 +124,20 @@ export async function readAlignedIne(
   blob: Blob,
   onProgress?: (progress: OcrProgress) => void,
 ): Promise<IneReadResult> {
-  onProgress?.({ status: "Preparando recortes de cada campo", progress: 28 });
-  const names = await Promise.all(
-    NAME_ZONES.map((zone) =>
-      cropRegion(blob, zone.left, zone.top, zone.right, zone.bottom, zone.scale, zone.contrast),
-    ),
-  );
-  onProgress?.({ status: "Preparando recortes de CURP y sección", progress: 36 });
-  const [curps, secciones] = await Promise.all([
-    Promise.all(
-      CURP_ZONES.map((zone) =>
-        cropRegion(blob, zone.left, zone.top, zone.right, zone.bottom, zone.scale, zone.contrast),
-      ),
-    ),
-    Promise.all(
-      SECCION_ZONES.map((zone) =>
-        cropRegion(blob, zone.left, zone.top, zone.right, zone.bottom, zone.scale, zone.contrast),
-      ),
-    ),
-  ]);
+  onProgress?.({ status: "Preparando recortes", progress: 30 });
+  const crops = await cropFieldZones(blob, [...NAME_ZONES, ...CURP_ZONES, ...SECCION_ZONES]);
+  const names = crops.slice(0, NAME_ZONES.length);
+  const curps = crops.slice(NAME_ZONES.length, NAME_ZONES.length + CURP_ZONES.length);
+  const secciones = crops.slice(NAME_ZONES.length + CURP_ZONES.length);
 
-  onProgress?.({ status: "Leyendo la credencial", progress: 42 });
+  let progress = 42;
+  onProgress?.({ status: "Leyendo nombre, CURP y sección", progress });
+  const tick = setInterval(() => {
+    progress = Math.min(86, progress + 4);
+    onProgress?.({ status: "Leyendo nombre, CURP y sección", progress });
+  }, 350);
 
   const form = new FormData();
-  form.append("image", blob, "ine.jpg");
   names.forEach((item, index) => form.append(`names${index + 1}`, item, `nombres${index + 1}.jpg`));
   curps.forEach((item, index) => form.append(`curp${index + 1}`, item, `curp${index + 1}.jpg`));
   secciones.forEach((item, index) => form.append(`seccion${index + 1}`, item, `seccion${index + 1}.jpg`));
@@ -158,6 +148,8 @@ export async function readAlignedIne(
     if (serverText && serverText.trim()) text = serverText;
   } catch {
     text = "";
+  } finally {
+    clearInterval(tick);
   }
 
   if (!text.trim()) {

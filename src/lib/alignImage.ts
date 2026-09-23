@@ -7,7 +7,7 @@ export type AlignedImage = {
   height: number;
 };
 
-async function canvasToJpeg(canvas: HTMLCanvasElement): Promise<Blob> {
+async function canvasToJpeg(canvas: HTMLCanvasElement, quality = 0.93): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
@@ -18,7 +18,7 @@ async function canvasToJpeg(canvas: HTMLCanvasElement): Promise<Blob> {
         resolve(blob);
       },
       "image/jpeg",
-      0.93,
+      quality,
     );
   });
 }
@@ -299,30 +299,74 @@ function boostContrast(canvas: HTMLCanvasElement): void {
   ctx.putImageData(image, 0, 0);
 }
 
+const MAX_CROP_SIDE = 640;
+
+function sizedCrop(
+  image: HTMLCanvasElement,
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+  scale: number,
+  contrast: boolean,
+): HTMLCanvasElement {
+  const x = Math.floor(image.width * left);
+  const y = Math.floor(image.height * top);
+  const width = Math.max(8, Math.floor(image.width * (right - left)));
+  const height = Math.max(8, Math.floor(image.height * (bottom - top)));
+  let outW = Math.round(width * scale);
+  let outH = Math.round(height * scale);
+  const longest = Math.max(outW, outH);
+  if (longest > MAX_CROP_SIDE) {
+    const fit = MAX_CROP_SIDE / longest;
+    outW = Math.max(8, Math.round(outW * fit));
+    outH = Math.max(8, Math.round(outH * fit));
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No se pudo recortar la zona");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "medium";
+  ctx.drawImage(image, x, y, width, height, 0, 0, outW, outH);
+  if (contrast) boostContrast(canvas);
+  return canvas;
+}
+
 export async function cropRegion(
   source: Blob,
   left: number,
   top: number,
   right: number,
   bottom: number,
-  scale = 2.4,
+  scale = 1.4,
   contrast = false,
 ): Promise<Blob> {
   const image = await loadToCanvas(source);
-  const x = Math.floor(image.width * left);
-  const y = Math.floor(image.height * top);
-  const width = Math.max(8, Math.floor(image.width * (right - left)));
-  const height = Math.max(8, Math.floor(image.height * (bottom - top)));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(width * scale);
-  canvas.height = Math.round(height * scale);
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("No se pudo recortar la zona");
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(image, x, y, width, height, 0, 0, canvas.width, canvas.height);
-  if (contrast) boostContrast(canvas);
-  return canvasToJpeg(canvas);
+  return canvasToJpeg(sizedCrop(image, left, top, right, bottom, scale, contrast), 0.8);
+}
+
+export async function cropFieldZones(
+  source: Blob,
+  zones: Array<{
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    scale: number;
+    contrast?: boolean;
+  }>,
+): Promise<Blob[]> {
+  const image = await loadToCanvas(source);
+  return Promise.all(
+    zones.map((zone) =>
+      canvasToJpeg(
+        sizedCrop(image, zone.left, zone.top, zone.right, zone.bottom, zone.scale, Boolean(zone.contrast)),
+        0.8,
+      ),
+    ),
+  );
 }
 
 export async function cropPixels(

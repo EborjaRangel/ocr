@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import { createWorker, PSM } from "tesseract.js";
+import { recognizeIneCrops } from "@/lib/ocrCrops";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 async function fileToBuffer(value: FormDataEntryValue | null): Promise<Buffer | null> {
   if (!(value instanceof File) || value.size === 0) return null;
@@ -13,11 +12,6 @@ async function fileToBuffer(value: FormDataEntryValue | null): Promise<Buffer | 
 export async function POST(request: Request) {
   try {
     const form = await request.formData();
-    const full = await fileToBuffer(form.get("image"));
-    if (!full) {
-      return NextResponse.json({ error: "Falta la imagen" }, { status: 400 });
-    }
-
     const names = (
       await Promise.all(
         [1, 2].map((index) =>
@@ -48,58 +42,12 @@ export async function POST(request: Request) {
       )
     ).filter((item): item is Buffer => Boolean(item));
 
-    const langPath = path.join(process.cwd(), "public", "tesseract", "lang");
-    const worker = await createWorker("spa", 1, {
-      langPath,
-      gzip: true,
-      cacheMethod: "none",
-    });
-
-    try {
-      const parts: string[] = [];
-
-      const nameModes = [PSM.SINGLE_COLUMN, PSM.SINGLE_BLOCK];
-      for (let i = 0; i < names.length; i += 1) {
-        await worker.setParameters({
-          tessedit_pageseg_mode: nameModes[i] ?? PSM.SINGLE_COLUMN,
-          preserve_interword_spaces: "1",
-        });
-        parts.push(i === 0 ? "===NOMBRES===" : `===NOMBRES${i + 1}===`);
-        parts.push("NOMBRE");
-        parts.push((await worker.recognize(names[i])).data.text ?? "");
-      }
-
-      const curpModes = [PSM.SPARSE_TEXT, PSM.SINGLE_LINE];
-      for (let i = 0; i < curps.length; i += 1) {
-        await worker.setParameters({
-          tessedit_pageseg_mode: curpModes[i] ?? PSM.SPARSE_TEXT,
-          tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-          preserve_interword_spaces: "0",
-        });
-        parts.push(i === 0 ? "===CURP===" : `===CURP${i + 1}===`);
-        parts.push("CURP");
-        parts.push((await worker.recognize(curps[i])).data.text ?? "");
-      }
-
-      const seccionModes = [PSM.SPARSE_TEXT, PSM.SINGLE_BLOCK];
-      const seccionLists = [
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-        "0123456789",
-      ];
-      for (let i = 0; i < secciones.length; i += 1) {
-        await worker.setParameters({
-          tessedit_pageseg_mode: seccionModes[i] ?? PSM.SPARSE_TEXT,
-          tessedit_char_whitelist: seccionLists[i] ?? "0123456789",
-          preserve_interword_spaces: "1",
-        });
-        parts.push(i === 0 ? "===SECCION===" : `===SECCION${i + 1}===`);
-        parts.push((await worker.recognize(secciones[i])).data.text ?? "");
-      }
-
-      return NextResponse.json({ text: parts.join("\n") });
-    } finally {
-      await worker.terminate();
+    if (names.length + curps.length + secciones.length === 0) {
+      return NextResponse.json({ error: "Faltan los recortes" }, { status: 400 });
     }
+
+    const text = await recognizeIneCrops({ names, curps, secciones });
+    return NextResponse.json({ text });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo leer la imagen";

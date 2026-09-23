@@ -6,7 +6,12 @@ export type IneFields = {
   seccion: string;
 };
 
-export type IneRecord = IneFields & {
+export type ChatCoyoFields = IneFields & {
+  celular: string;
+  correo: string;
+};
+
+export type IneRecord = ChatCoyoFields & {
   fecha: string;
 };
 
@@ -16,6 +21,12 @@ export const EMPTY_INE_FIELDS: IneFields = {
   apellidoMaterno: "",
   curp: "",
   seccion: "",
+};
+
+export const EMPTY_CHAT_FIELDS: ChatCoyoFields = {
+  ...EMPTY_INE_FIELDS,
+  celular: "",
+  correo: "",
 };
 
 export type OcrProgress = {

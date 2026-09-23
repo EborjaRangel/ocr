@@ -1,9 +1,11 @@
 import * as Yup from "yup";
-import type { IneFields } from "./types";
+import type { ChatCoyoFields, IneFields } from "./types";
 
 export const CURP_REGEX = /^[A-Z]{4}\d{6}[HMX][A-Z0-9]{7}$/;
+export const CELULAR_REGEX = /^\d{10}$/;
+export const CORREO_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const NAME_REGEX = /^[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ\s.'-]*$/i;
+export const NAME_REGEX = /^[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ\s.'-]*$/i;
 
 export const ineSchema: Yup.ObjectSchema<IneFields> = Yup.object({
   nombre: Yup.string()
@@ -35,3 +37,17 @@ export const ineSchema: Yup.ObjectSchema<IneFields> = Yup.object({
       "En Coyoacán la sección es 0 + 3 dígitos, o 5515",
     ),
 });
+
+export const chatCoyoSchema: Yup.ObjectSchema<ChatCoyoFields> = ineSchema.concat(
+  Yup.object({
+    celular: Yup.string()
+      .trim()
+      .required("El celular es obligatorio")
+      .matches(CELULAR_REGEX, "El celular debe tener 10 dígitos"),
+    correo: Yup.string()
+      .trim()
+      .required("El correo es obligatorio")
+      .transform((value: string) => value.toLowerCase())
+      .matches(CORREO_REGEX, "El correo no es válido"),
+  }),
+);

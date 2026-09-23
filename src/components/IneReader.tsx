@@ -7,7 +7,12 @@ import { FormField } from "@/components/FormField";
 import { RegistrosTable } from "@/components/RegistrosTable";
 import { alignIneImage, rotateAlignedImage } from "@/lib/alignImage";
 import { missingIneFields } from "@/lib/ineParser";
-import { NOT_SHARP_MESSAGE } from "@/lib/imageQuality";
+import {
+  GLARE_MESSAGE,
+  NOT_SHARP_MESSAGE,
+  assessImageQuality,
+  retakeReason,
+} from "@/lib/imageQuality";
 import { readAlignedIne } from "@/lib/ocr";
 import { EMPTY_INE_FIELDS, type IneFields, type IneRecord } from "@/lib/types";
 import { ineSchema } from "@/lib/validation";
@@ -36,9 +41,10 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
   const [rawText, setRawText] = useState("");
   const [showRaw, setShowRaw] = useState(true);
   const [missing, setMissing] = useState<Array<keyof IneFields>>([]);
-  const [message, setMessage] = useState<{ type: "ok" | "error" | "blur"; text: string } | null>(
-    null,
-  );
+  const [message, setMessage] = useState<{
+    type: "ok" | "error" | "blur" | "glare";
+    text: string;
+  } | null>(null);
   const [registros, setRegistros] = useState<IneRecord[]>(initialRegistros);
   const [loadingRegistros, setLoadingRegistros] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -117,6 +123,19 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
       const alignedImage = await alignIneImage(nextFile);
       if (job !== jobRef.current) return;
       setPreviewBlob(alignedImage.blob);
+      const quality = await assessImageQuality(alignedImage.blob);
+      if (job !== jobRef.current) return;
+      const reason = retakeReason(quality);
+      if (reason) {
+        setAligned(false);
+        setOcrStatus("");
+        setOcrProgress(0);
+        setMessage({
+          type: reason,
+          text: reason === "glare" ? GLARE_MESSAGE : NOT_SHARP_MESSAGE,
+        });
+        return;
+      }
       setAligned(true);
       setOcrStatus("");
       setOcrProgress(0);
@@ -160,10 +179,22 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
     const job = existingJob ?? ++jobRef.current;
     setOcrBusy(true);
     setOcrProgress(25);
-    setOcrStatus("Leyendo 5 veces cada campo para comparar y confirmar");
+    setOcrStatus("Revisando brillos y leyendo la credencial");
     setMessage(null);
 
     try {
+      const quality = await assessImageQuality(source);
+      if (job !== jobRef.current) return;
+      const reason = retakeReason(quality);
+      if (reason) {
+        setAligned(false);
+        setMessage({
+          type: reason,
+          text: reason === "glare" ? GLARE_MESSAGE : NOT_SHARP_MESSAGE,
+        });
+        return;
+      }
+
       const result = await readAlignedIne(source, ({ status, progress }) => {
         if (job !== jobRef.current) return;
         setOcrStatus(status);
@@ -424,16 +455,18 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
         </section>
       </div>
 
-      {message?.type === "blur" && (
+      {(message?.type === "blur" || message?.type === "glare") && (
         <div
           role="alert"
           className="rounded-2xl border border-amber-300 bg-amber-50 px-5 py-4 text-amber-950"
         >
-          <p className="text-base font-semibold">{NOT_SHARP_MESSAGE}</p>
+          <p className="text-base font-semibold">
+            {message.type === "glare" ? GLARE_MESSAGE : NOT_SHARP_MESSAGE}
+          </p>
           <p className="mt-1 text-sm text-amber-900">
-            Alinea la credencial con los botones Girar (nombre arriba, foto a la
-            derecha) y pulsa Leer credencial. Si sigue sin leer, toma otra foto
-            de frente y con buena luz.
+            {message.type === "glare"
+              ? "Apaga el flash, inclina un poco el teléfono y evita que el holograma tape el nombre, el CURP o la sección."
+              : "Alinea la credencial con los botones Girar (nombre arriba, foto a la derecha) y pulsa Leer credencial. Si sigue sin leer, toma otra foto de frente y con buena luz."}
           </p>
           <button
             type="button"
@@ -462,7 +495,7 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
         </div>
       ) : null}
 
-      {message && message.type !== "blur" && (
+      {message && message.type !== "blur" && message.type !== "glare" && (
         <p
           className={`rounded-xl px-4 py-3 text-sm ${
             message.type === "ok"
