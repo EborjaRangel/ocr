@@ -1,6 +1,5 @@
 import {
   alignIneBuffer,
-  cropHeaderStrip,
   cropIneZones,
   orientationTurns,
   prepareIneInput,
@@ -8,12 +7,12 @@ import {
 import { detectIneVersion } from "./detectIneVersion";
 import { hasAnyIneData, parseIneText } from "./ineParser";
 import { templateFor } from "./ineTemplates";
-import { scoreInstitutoHeader } from "./institutoHeader";
-import { recognizeImageWords, recognizeIneCrops } from "./ocrCrops";
+import { recognizeIneCrops } from "./ocrCrops";
 import { readSeccionFromRegion } from "./readSeccion";
 import type { IneFields } from "./types";
 import { EMPTY_INE_FIELDS } from "./types";
 import { blockedSeccionFromCurp, isFourDigitSeccion } from "./validateSeccion";
+import { hasVisionOcr, readIneWithVision } from "./visionIne";
 
 function scoreFields(fields: IneFields): number {
   let score = 0;
@@ -24,30 +23,6 @@ function scoreFields(fields: IneFields): number {
   if (fields.claveElector.length === 18) score += 4;
   if (isFourDigitSeccion(fields.seccion)) score += 3;
   return score;
-}
-
-async function headerScore(aligned: Buffer): Promise<number> {
-  const strip = await cropHeaderStrip(aligned);
-  const read = await recognizeImageWords(strip);
-  return scoreInstitutoHeader(read.text);
-}
-
-async function uprightCard(prepared: Buffer): Promise<Buffer> {
-  const turns = await orientationTurns(prepared);
-  let best = await alignIneBuffer(prepared, turns[0] ?? 0);
-  let bestScore = await headerScore(best);
-
-  for (const turn of turns.slice(1, 2)) {
-    if (bestScore >= 20) break;
-    const aligned = await alignIneBuffer(prepared, turn);
-    const score = await headerScore(aligned);
-    if (score > bestScore) {
-      best = aligned;
-      bestScore = score;
-    }
-  }
-
-  return best;
 }
 
 async function readByTemplate(aligned: Buffer): Promise<IneFields> {
@@ -69,21 +44,8 @@ async function readByTemplate(aligned: Buffer): Promise<IneFields> {
     : "";
 
   if (!seccion && crops.secciones[0]) {
-    const fromZone = await readSeccionFromRegion(crops.secciones[0], blocked);
-    seccion = fromZone.value;
+    seccion = (await readSeccionFromRegion(crops.secciones[0], blocked)).value;
   }
-  if (!seccion && crops.secciones[1]) {
-    const fromZone = await readSeccionFromRegion(crops.secciones[1], blocked);
-    seccion = fromZone.value;
-  }
-
-  console.log("ChatCoyo INE", {
-    version,
-    curp: Boolean(parsed.curp),
-    clave: Boolean(parsed.claveElector),
-    names: [parsed.apellidoPaterno, parsed.apellidoMaterno, parsed.nombre].filter(Boolean).length,
-    seccion: Boolean(seccion),
-  });
 
   return {
     ...EMPTY_INE_FIELDS,
@@ -96,13 +58,25 @@ export async function readInePhoto(input: Buffer): Promise<{
   fields: IneFields;
   foundData: boolean;
 }> {
-  const prepared = await prepareIneInput(input);
-  const aligned = await uprightCard(prepared);
-  const fields = await readByTemplate(aligned);
-
-  if (!isFourDigitSeccion(fields.seccion)) {
-    fields.seccion = "";
+  if (hasVisionOcr()) {
+    const fields = await readIneWithVision(input);
+    console.log("ChatCoyo INE vision", {
+      curp: Boolean(fields.curp),
+      clave: Boolean(fields.claveElector),
+      names: [fields.apellidoPaterno, fields.apellidoMaterno, fields.nombre].filter(Boolean).length,
+      seccion: Boolean(fields.seccion),
+    });
+    return {
+      fields,
+      foundData: hasAnyIneData(fields) || scoreFields(fields) > 0,
+    };
   }
+
+  const prepared = await prepareIneInput(input);
+  const turns = await orientationTurns(prepared);
+  const aligned = await alignIneBuffer(prepared, turns[0] ?? 0);
+  const fields = await readByTemplate(aligned);
+  if (!isFourDigitSeccion(fields.seccion)) fields.seccion = "";
 
   return {
     fields,

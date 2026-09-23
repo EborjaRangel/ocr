@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import { appendRegistro } from "../csv";
 import { readInePhoto } from "../readInePhoto";
+import { hasVisionOcr } from "../visionIne";
 import type { ChatCoyoFields } from "../types";
 import {
   CELULAR_REGEX,
@@ -159,7 +160,11 @@ async function downloadImage(ctx: Context): Promise<Buffer | null> {
 }
 
 async function readPhotoAndReview(ctx: Context, session: ChatSession, image: Buffer) {
-  await ctx.reply("Leyendo la credencial INE. Espera un momento…");
+  await ctx.reply(
+    hasVisionOcr()
+      ? "Leyendo la INE con el modelo de visión. Espera un momento…"
+      : "Leyendo la credencial INE. Espera un momento…",
+  );
   try {
     const result = await readInePhoto(image);
     session.data = { ...session.data, ...result.fields };
