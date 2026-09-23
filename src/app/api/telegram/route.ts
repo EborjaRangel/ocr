@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Update } from "grammy/types";
 import { getChatCoyoBot } from "@/lib/telegram/bot";
-import { setAxisProfilePhoto } from "@/lib/telegram/brand";
+import { setAxisBotIdentity } from "@/lib/telegram/brand";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -44,9 +44,9 @@ export async function GET(request: Request) {
     }),
   });
   const data = (await response.json()) as unknown;
-  const photo = await setAxisProfilePhoto(token).catch((error: unknown) => ({
+  const brand = await setAxisBotIdentity(token).catch((error: unknown) => ({
     ok: false,
-    description: error instanceof Error ? error.message : "No se pudo subir el logo",
+    description: error instanceof Error ? error.message : "No se pudo aplicar la marca AXIS",
   }));
-  return NextResponse.json({ ok: true, bot: "ChatCoyo", webhook: data, photo });
+  return NextResponse.json({ ok: true, bot: "ChatCoyo · AXIS", webhook: data, brand });
 }
