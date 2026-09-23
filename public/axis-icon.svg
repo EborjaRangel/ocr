@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AXIS">
+  <defs>
+    <linearGradient id="axis-icon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0055a4"/>
+      <stop offset="100%" stop-color="#003366"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#axis-icon-gradient)"/>
+  <path
+    d="M32 18 L46 50 H40.5 L37.5 42 H26.5 L23.5 50 H18 L32 18 Z M28.5 37 H35.5 L32 28.5 Z"
+    fill="#ffffff"
+  />
+</svg>

@@ -1,5 +1,9 @@
 import { InputFile } from "grammy";
-import { AXIS_LOGO_JPEG_BASE64 } from "./axisLogoData";
+import { AXIS_ICON_JPEG_BASE64, AXIS_LOGO_JPEG_BASE64 } from "./axisLogoData";
+
+export function axisIconBuffer(): Buffer {
+  return Buffer.from(AXIS_ICON_JPEG_BASE64, "base64");
+}
 
 export function axisLogoBuffer(): Buffer {
   return Buffer.from(AXIS_LOGO_JPEG_BASE64, "base64");
@@ -19,7 +23,7 @@ export const AXIS_HOLA_SHORT_CAPTION =
   "Hola, soy ChatCoyo, de AXIS. ¿Cuál es tu celular a 10 dígitos?";
 
 export async function setAxisProfilePhoto(token: string): Promise<{ ok: boolean; description?: string }> {
-  const jpeg = axisLogoBuffer();
+  const jpeg = axisIconBuffer();
   const form = new FormData();
   form.append(
     "photo",
