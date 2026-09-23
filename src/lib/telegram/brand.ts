@@ -12,8 +12,13 @@ export function axisLogoFile() {
 
 export async function axisProfilePhotoBuffer(): Promise<Buffer> {
   const size = 1024;
-  const wordmark = await sharp(axisLogoBuffer())
-    .resize({ width: 860, height: 320, fit: "inside" })
+  const cropped = await sharp(axisLogoBuffer())
+    .extract({ left: 360, top: 0, width: 740, height: 360 })
+    .jpeg()
+    .toBuffer();
+  const letters = await sharp(cropped).trim().png().toBuffer();
+  const fitted = await sharp(letters)
+    .resize({ width: 780, height: 280, fit: "inside" })
     .png()
     .toBuffer();
   return sharp({
@@ -24,7 +29,7 @@ export async function axisProfilePhotoBuffer(): Promise<Buffer> {
       background: { r: 255, g: 255, b: 255 },
     },
   })
-    .composite([{ input: wordmark, gravity: "center" }])
+    .composite([{ input: fitted, gravity: "center" }])
     .jpeg({ quality: 92 })
     .toBuffer();
 }
