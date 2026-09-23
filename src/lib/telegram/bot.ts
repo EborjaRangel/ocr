@@ -24,6 +24,7 @@ import {
   resetSession,
 } from "./session";
 import { formatLivedAge, livedAgeUntil, parseBirthDate } from "./livedAge";
+import { formatSignAndHoroscope } from "./horoscope";
 
 const FIELD_LABELS: Record<EditableField, string> = {
   celular: "Celular",
@@ -412,7 +413,7 @@ function createBot(token: string): Bot {
       const name = session.givenName?.trim() || "Hola";
       session.step = "celular";
       await ctx.reply(
-        `${formatLivedAge(name, age)}\n\nAhora el registro. ¿Cuál es tu celular a 10 dígitos?`,
+        `${formatLivedAge(name, age)}\n${formatSignAndHoroscope(parsed.date)}\n\nAhora el registro. ¿Cuál es tu celular a 10 dígitos?`,
       );
       return;
     }
