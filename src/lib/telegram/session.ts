@@ -3,6 +3,7 @@ import { EMPTY_CHAT_FIELDS } from "../types";
 
 export type ChatStep =
   | "idle"
+  | "menu"
   | "nombreBienvenida"
   | "fechaNacimiento"
   | "celular"
@@ -38,6 +39,12 @@ export function getSession(chatId: number): ChatSession {
 }
 
 export function resetSession(chatId: number): ChatSession {
+  const created = emptySession("menu");
+  sessions.set(chatId, created);
+  return created;
+}
+
+export function startAltaSession(chatId: number): ChatSession {
   const created = emptySession("nombreBienvenida");
   sessions.set(chatId, created);
   return created;

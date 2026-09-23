@@ -1,11 +1,13 @@
-import { Bot, InlineKeyboard, type Context } from "grammy";
-import { appendRegistro } from "../csv";
+import { Bot, InlineKeyboard, InputFile, Keyboard, type Context } from "grammy";
+import { appendRegistro, getCsvFile, listRegistros } from "../csv";
 import { readInePhoto } from "../readInePhoto";
 import { hasVisionOcr } from "../visionIne";
 import type { ChatCoyoFields } from "../types";
 import {
+  AXIS_ALTA_CAPTION,
   AXIS_HOLA_CAPTION,
   AXIS_HOLA_SHORT_CAPTION,
+  AXIS_MENU_CAPTION,
   AXIS_START_CAPTION,
 } from "./brand";
 import {
@@ -22,6 +24,7 @@ import {
   clearSession,
   getSession,
   resetSession,
+  startAltaSession,
 } from "./session";
 import { formatLivedAge, livedAgeUntil, parseBirthDate } from "./livedAge";
 import { formatSignAndHoroscope } from "./horoscope";
@@ -77,6 +80,29 @@ function show(value: string): string {
   return value.trim() ? value : "—";
 }
 
+const MENU_VER = "Ver mis registros";
+const MENU_ALTA = "Dar de alta un nuevo registro";
+
+function mainMenuKeyboard() {
+  return new InlineKeyboard()
+    .text(MENU_VER, "menu:ver")
+    .row()
+    .text(MENU_ALTA, "menu:alta");
+}
+
+function mainReplyKeyboard() {
+  return new Keyboard()
+    .text(MENU_VER)
+    .row()
+    .text(MENU_ALTA)
+    .resized()
+    .persistent();
+}
+
+function isMenuText(text: string): boolean {
+  return new RegExp(`^(${MENU_VER}|${MENU_ALTA})$`, "i").test(text.trim());
+}
+
 function reviewKeyboard() {
   return new InlineKeyboard()
     .text("Sí, guardar", "ok")
@@ -120,22 +146,66 @@ async function showReview(ctx: Context, session: ChatSession) {
   await ctx.reply(summaryText(session.data), { reply_markup: reviewKeyboard() });
 }
 
-function startRegistro(chatId: number): ChatSession {
-  return resetSession(chatId);
-}
-
-async function beginChat(ctx: Context, message: string) {
+async function showMainMenu(ctx: Context, message = AXIS_MENU_CAPTION) {
   const chatId = ctx.chat?.id;
   if (!chatId) return;
-  const session = startRegistro(chatId);
+  const session = resetSession(chatId);
   session.readGen += 1;
   session.lastFileId = undefined;
-  await ctx.reply(message);
+  await ctx.reply(message, {
+    reply_markup: mainReplyKeyboard(),
+  });
+  await ctx.reply("Toca una opción:", {
+    reply_markup: mainMenuKeyboard(),
+  });
+}
+
+async function beginChat(ctx: Context, _message?: string) {
+  await showMainMenu(ctx);
+}
+
+async function startAlta(ctx: Context) {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const session = startAltaSession(chatId);
+  session.readGen += 1;
+  session.lastFileId = undefined;
+  await ctx.reply(AXIS_ALTA_CAPTION, {
+    reply_markup: mainReplyKeyboard(),
+  });
+}
+
+async function sendRegistrosCsv(ctx: Context) {
+  const records = await listRegistros();
+  if (records.length === 0) {
+    await ctx.reply("Aún no hay registros guardados.", {
+      reply_markup: mainMenuKeyboard(),
+    });
+    return;
+  }
+  const file = await getCsvFile();
+  await ctx.replyWithDocument(new InputFile(file.content, "registros-chatcoyo.csv"), {
+    caption: `${records.length} registro${records.length === 1 ? "" : "s"} guardado${records.length === 1 ? "" : "s"}.`,
+    reply_markup: mainMenuKeyboard(),
+  });
+}
+
+async function handleMenuChoice(ctx: Context, choice: string) {
+  if (/^menu:ver$/i.test(choice) || choice.toLowerCase() === MENU_VER.toLowerCase()) {
+    await sendRegistrosCsv(ctx);
+    return;
+  }
+  if (/^menu:alta$/i.test(choice) || choice.toLowerCase() === MENU_ALTA.toLowerCase()) {
+    await startAlta(ctx);
+  }
 }
 
 async function exitChat(ctx: Context, chatId: number) {
   clearSession(chatId);
-  await ctx.reply("Saliste de ChatCoyo. El registro no se guardó.\nCuando quieras empezar de nuevo, escribe /hola");
+  await showMainMenu(
+    ctx,
+    "Saliste de ChatCoyo. El registro no se guardó.",
+  );
 }
 
 function normalizeField(field: EditableField, raw: string): { value: string; error?: string } {
@@ -256,7 +326,7 @@ async function acceptInePhoto(ctx: Context) {
       );
       return;
     }
-    await ctx.reply("Primero tu nombre y fecha de nacimiento, luego celular, correo y la foto de la INE. Escribe /hola para empezar.");
+    await ctx.reply("Primero elige una opción del menú. Si vas a dar de alta, luego te pediré nombre, fecha, celular, correo y la foto de la INE.");
     return;
   }
 
@@ -316,6 +386,11 @@ function createBot(token: string): Bot {
     const data = ctx.callbackQuery.data;
     await ctx.answerCallbackQuery();
 
+    if (data === "menu:ver" || data === "menu:alta") {
+      await handleMenuChoice(ctx, data);
+      return;
+    }
+
     if (data === "ok") {
       try {
         const fields = await chatCoyoSchema.validate(session.data, {
@@ -323,10 +398,7 @@ function createBot(token: string): Bot {
           stripUnknown: true,
         });
         await appendRegistro(fields);
-        clearSession(chatId);
-        await ctx.reply(
-          "Datos guardados. Gracias.\nPara otro registro escribe /hola",
-        );
+        await showMainMenu(ctx, "Datos guardados. Gracias.");
       } catch {
         await ctx.reply(
           "Todavía falta un dato o alguno no es válido. Toca el botón del campo y corrígelo.",
@@ -387,7 +459,16 @@ function createBot(token: string): Bot {
       await exitChat(ctx, ctx.chat.id);
       return;
     }
+    if (isMenuText(text)) {
+      await handleMenuChoice(ctx, text);
+      return;
+    }
     const session = getSession(ctx.chat.id);
+
+    if (session.step === "menu" || session.step === "idle") {
+      await showMainMenu(ctx);
+      return;
+    }
 
     if (session.step === "nombreBienvenida") {
       const parsed = normalizeField("nombre", text);
@@ -470,7 +551,7 @@ function createBot(token: string): Bot {
       return;
     }
 
-    await ctx.reply("Escribe /hola para empezar un registro con ChatCoyo.");
+    await showMainMenu(ctx);
   });
 
   bot.catch((error) => {
