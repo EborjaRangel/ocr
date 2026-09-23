@@ -59,5 +59,9 @@ export const chatCoyoSchema: Yup.ObjectSchema<ChatCoyoFields> = ineSchema.concat
       .required("El correo es obligatorio")
       .transform((value: string) => value.toLowerCase())
       .matches(CORREO_REGEX, "El correo no es válido"),
+    diasVividos: Yup.string().trim().default(""),
+    anios: Yup.string().trim().default(""),
+    meses: Yup.string().trim().default(""),
+    signoZodiacal: Yup.string().trim().default(""),
   }),
 );

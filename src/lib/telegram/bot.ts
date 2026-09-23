@@ -27,7 +27,7 @@ import {
   startAltaSession,
 } from "./session";
 import { formatLivedAge, livedAgeUntil, parseBirthDate } from "./livedAge";
-import { formatSignAndHoroscope } from "./horoscope";
+import { formatSignAndHoroscope, zodiacSign } from "./horoscope";
 
 const FIELD_LABELS: Record<EditableField, string> = {
   celular: "Celular",
@@ -135,6 +135,10 @@ function summaryText(data: ChatCoyoFields): string {
     `CURP: ${show(data.curp)}`,
     `Clave de elector: ${show(data.claveElector)}`,
     `Sección: ${show(data.seccion)}`,
+    `Días vividos: ${show(data.diasVividos)}`,
+    `Años: ${show(data.anios)}`,
+    `Meses: ${show(data.meses)}`,
+    `Signo: ${show(data.signoZodiacal)}`,
     "",
     "Si un dato no se leyó o está mal, toca su botón. Si todo está bien, toca Sí, guardar.",
   ].join("\n");
@@ -492,6 +496,10 @@ function createBot(token: string): Bot {
       }
       const age = livedAgeUntil(parsed.date);
       const name = session.givenName?.trim() || "Hola";
+      session.data.diasVividos = String(age.days);
+      session.data.anios = String(age.years);
+      session.data.meses = String(age.months);
+      session.data.signoZodiacal = zodiacSign(parsed.date);
       session.step = "celular";
       await ctx.reply(
         `${formatLivedAge(name, age)}\n${formatSignAndHoroscope(parsed.date)}\n\nAhora el registro. ¿Cuál es tu celular a 10 dígitos?`,

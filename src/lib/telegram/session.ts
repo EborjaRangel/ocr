@@ -13,7 +13,15 @@ export type ChatStep =
   | "revision"
   | "editando";
 
-export type EditableField = keyof ChatCoyoFields;
+export type EditableField =
+  | "celular"
+  | "correo"
+  | "nombre"
+  | "apellidoPaterno"
+  | "apellidoMaterno"
+  | "curp"
+  | "claveElector"
+  | "seccion";
 
 export type ChatSession = {
   step: ChatStep;

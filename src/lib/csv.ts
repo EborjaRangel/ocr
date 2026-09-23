@@ -18,6 +18,10 @@ const HEADERS = [
   "curp",
   "claveElector",
   "seccion",
+  "diasVividos",
+  "anios",
+  "meses",
+  "signoZodiacal",
 ] as const;
 
 let writeQueue: Promise<void> = Promise.resolve();
@@ -70,7 +74,31 @@ function normalizeRecord(fields: IneFields & Partial<ChatCoyoFields>): IneRecord
     curp: fields.curp.trim().toUpperCase(),
     claveElector: (fields.claveElector ?? "").trim().toUpperCase().replace(/\s/g, ""),
     seccion: fields.seccion.trim().padStart(4, "0").slice(-4),
+    diasVividos: (fields.diasVividos ?? "").trim(),
+    anios: (fields.anios ?? "").trim(),
+    meses: (fields.meses ?? "").trim(),
+    signoZodiacal: (fields.signoZodiacal ?? "").trim(),
   };
+}
+
+function recordToRow(record: IneRecord): string {
+  return [
+    record.fecha,
+    record.celular,
+    record.correo,
+    record.nombre,
+    record.apellidoPaterno,
+    record.apellidoMaterno,
+    record.curp,
+    record.claveElector,
+    record.seccion,
+    record.diasVividos,
+    record.anios,
+    record.meses,
+    record.signoZodiacal,
+  ]
+    .map(escapeCsv)
+    .join(",");
 }
 
 function rowFromCols(header: string[], cols: string[]): IneRecord {
@@ -88,6 +116,10 @@ function rowFromCols(header: string[], cols: string[]): IneRecord {
     curp: get("curp", 4),
     claveElector: get("claveElector", -1),
     seccion: get("seccion", 5),
+    diasVividos: get("diasVividos", -1),
+    anios: get("anios", -1),
+    meses: get("meses", -1),
+    signoZodiacal: get("signoZodiacal", -1),
   };
 }
 
@@ -102,19 +134,7 @@ async function migrateCsv(content: string): Promise<string | null> {
     HEADERS.join(","),
     ...rows.map((line) => {
       const record = rowFromCols(header, parseCsvLine(line));
-      return [
-        record.fecha,
-        record.celular,
-        record.correo,
-        record.nombre,
-        record.apellidoPaterno,
-        record.apellidoMaterno,
-        record.curp,
-        record.claveElector,
-        record.seccion,
-      ]
-        .map(escapeCsv)
-        .join(",");
+      return recordToRow(record);
     }),
   ].join("\n");
   return `${next}\n`;
@@ -138,20 +158,7 @@ export async function appendRegistro(
 
   writeQueue = writeQueue.then(async () => {
     await ensureCsvFile();
-    const row = [
-      record.fecha,
-      record.celular,
-      record.correo,
-      record.nombre,
-      record.apellidoPaterno,
-      record.apellidoMaterno,
-      record.curp,
-      record.claveElector,
-      record.seccion,
-    ]
-      .map(escapeCsv)
-      .join(",");
-    await fs.appendFile(CSV_PATH, `${row}\n`, "utf8");
+    await fs.appendFile(CSV_PATH, `${recordToRow(record)}\n`, "utf8");
   });
 
   await writeQueue;

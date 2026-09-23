@@ -48,6 +48,10 @@ export function RegistrosTable({ registros, loading }: RegistrosTableProps) {
             <th className="px-3 py-3 font-semibold">CURP</th>
             <th className="px-3 py-3 font-semibold">Clave elector</th>
             <th className="px-3 py-3 font-semibold">Sección</th>
+            <th className="px-3 py-3 font-semibold">Días vividos</th>
+            <th className="px-3 py-3 font-semibold">Años</th>
+            <th className="px-3 py-3 font-semibold">Meses</th>
+            <th className="px-3 py-3 font-semibold">Signo</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-stone-100 bg-white">
@@ -81,6 +85,18 @@ export function RegistrosTable({ registros, loading }: RegistrosTableProps) {
                 <span className="inline-flex min-w-16 items-center justify-center rounded-lg bg-[#F6E8C3] px-2 py-1 font-mono text-sm font-bold tracking-widest text-stone-900">
                   {registro.seccion}
                 </span>
+              </td>
+              <td className="whitespace-nowrap px-3 py-3 text-stone-800">
+                {registro.diasVividos || "—"}
+              </td>
+              <td className="whitespace-nowrap px-3 py-3 text-stone-800">
+                {registro.anios || "—"}
+              </td>
+              <td className="whitespace-nowrap px-3 py-3 text-stone-800">
+                {registro.meses || "—"}
+              </td>
+              <td className="whitespace-nowrap px-3 py-3 text-stone-800">
+                {registro.signoZodiacal || "—"}
               </td>
             </tr>
           ))}
