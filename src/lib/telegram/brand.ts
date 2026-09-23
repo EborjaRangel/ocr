@@ -35,13 +35,12 @@ export async function axisProfilePhotoBuffer(): Promise<Buffer> {
 }
 
 export const AXIS_START_CAPTION =
-  "Hola, soy ChatCoyo. Voy a pedirte celular, correo y una foto de tu INE (puede ser vertical u horizontal).\n\nSi quieres cancelar, escribe /salir.\n\n¿Cuál es tu celular a 10 dígitos?";
+  "Hola, soy ChatCoyo. Primero tu nombre y tu fecha de nacimiento; después celular, correo y una foto de tu INE.\n\nSi quieres cancelar, escribe /salir.\n\n¿Cómo te llamas?";
 
 export const AXIS_HOLA_CAPTION =
-  "Hola, soy ChatCoyo. La foto de la INE puede ir vertical u horizontal.\nSi quieres cancelar, escribe /salir.\n\n¿Cuál es tu celular a 10 dígitos?";
+  "Hola, soy ChatCoyo. Si quieres cancelar, escribe /salir.\n\n¿Cómo te llamas?";
 
-export const AXIS_HOLA_SHORT_CAPTION =
-  "Hola, soy ChatCoyo. ¿Cuál es tu celular a 10 dígitos?";
+export const AXIS_HOLA_SHORT_CAPTION = "Hola, soy ChatCoyo. ¿Cómo te llamas?";
 
 export async function setAxisProfilePhoto(token: string): Promise<{ ok: boolean; description?: string }> {
   await fetch(`https://api.telegram.org/bot${token}/deleteMyProfilePhoto`, {

@@ -1,7 +1,16 @@
 import type { ChatCoyoFields } from "../types";
 import { EMPTY_CHAT_FIELDS } from "../types";
 
-export type ChatStep = "idle" | "celular" | "correo" | "foto" | "leyendo" | "revision" | "editando";
+export type ChatStep =
+  | "idle"
+  | "nombreBienvenida"
+  | "fechaNacimiento"
+  | "celular"
+  | "correo"
+  | "foto"
+  | "leyendo"
+  | "revision"
+  | "editando";
 
 export type EditableField = keyof ChatCoyoFields;
 
@@ -9,6 +18,7 @@ export type ChatSession = {
   step: ChatStep;
   editing?: EditableField;
   data: ChatCoyoFields;
+  givenName?: string;
   readGen: number;
   lastFileId?: string;
 };
@@ -28,7 +38,7 @@ export function getSession(chatId: number): ChatSession {
 }
 
 export function resetSession(chatId: number): ChatSession {
-  const created = emptySession("celular");
+  const created = emptySession("nombreBienvenida");
   sessions.set(chatId, created);
   return created;
 }

@@ -23,6 +23,7 @@ import {
   getSession,
   resetSession,
 } from "./session";
+import { formatLivedAge, livedAgeUntil, parseBirthDate } from "./livedAge";
 
 const FIELD_LABELS: Record<EditableField, string> = {
   celular: "Celular",
@@ -254,7 +255,7 @@ async function acceptInePhoto(ctx: Context) {
       );
       return;
     }
-    await ctx.reply("Primero el celular, luego el correo y al final la foto de la INE. Escribe /hola para empezar.");
+    await ctx.reply("Primero tu nombre y fecha de nacimiento, luego celular, correo y la foto de la INE. Escribe /hola para empezar.");
     return;
   }
 
@@ -386,6 +387,35 @@ function createBot(token: string): Bot {
       return;
     }
     const session = getSession(ctx.chat.id);
+
+    if (session.step === "nombreBienvenida") {
+      const parsed = normalizeField("nombre", text);
+      if (parsed.error) {
+        await ctx.reply("Escribe tu nombre, solo letras.");
+        return;
+      }
+      session.givenName = text.trim();
+      session.step = "fechaNacimiento";
+      await ctx.reply(
+        `Gracias, ${session.givenName}. ¿Cuál es tu fecha de nacimiento? Escríbela como 15/03/1990.`,
+      );
+      return;
+    }
+
+    if (session.step === "fechaNacimiento") {
+      const parsed = parseBirthDate(text);
+      if (parsed.error) {
+        await ctx.reply(parsed.error);
+        return;
+      }
+      const age = livedAgeUntil(parsed.date);
+      const name = session.givenName?.trim() || "Hola";
+      session.step = "celular";
+      await ctx.reply(
+        `${formatLivedAge(name, age)}\n\nAhora el registro. ¿Cuál es tu celular a 10 dígitos?`,
+      );
+      return;
+    }
 
     if (session.step === "celular") {
       const parsed = normalizeField("celular", text);
