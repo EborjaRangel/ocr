@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { webhookCallback } from "grammy";
+import type { Update } from "grammy/types";
 import { getChatCoyoBot } from "@/lib/telegram/bot";
 
 export const runtime = "nodejs";
@@ -12,8 +12,11 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
-  const handle = webhookCallback(getChatCoyoBot(), "std/http");
-  return handle(request);
+  const update = (await request.json()) as Update;
+  void getChatCoyoBot()
+    .handleUpdate(update)
+    .catch((error) => console.error("ChatCoyo webhook", error));
+  return NextResponse.json({ ok: true });
 }
 
 export async function GET(request: Request) {

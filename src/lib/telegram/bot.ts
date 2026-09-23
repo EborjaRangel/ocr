@@ -42,6 +42,28 @@ const FIELD_HINTS: Record<EditableField, string> = {
 };
 
 let botInstance: Bot | null = null;
+const seenUpdates = new Map<number, number>();
+const seenFiles = new Map<string, number>();
+
+function alreadyHandled(id: number, ttlMs = 10 * 60 * 1000): boolean {
+  const now = Date.now();
+  for (const [key, at] of seenUpdates) {
+    if (now - at > ttlMs) seenUpdates.delete(key);
+  }
+  if (seenUpdates.has(id)) return true;
+  seenUpdates.set(id, now);
+  return false;
+}
+
+function alreadyReadingFile(fileId: string, ttlMs = 10 * 60 * 1000): boolean {
+  const now = Date.now();
+  for (const [key, at] of seenFiles) {
+    if (now - at > ttlMs) seenFiles.delete(key);
+  }
+  if (seenFiles.has(fileId)) return true;
+  seenFiles.set(fileId, now);
+  return false;
+}
 
 function show(value: string): string {
   return value.trim() ? value : "—";
@@ -160,11 +182,7 @@ async function downloadImage(ctx: Context): Promise<Buffer | null> {
 }
 
 async function readPhotoAndReview(ctx: Context, session: ChatSession, image: Buffer) {
-  await ctx.reply(
-    hasVisionOcr()
-      ? "Leyendo la INE con el modelo de visión. Espera un momento…"
-      : "Leyendo la credencial INE. Espera un momento…",
-  );
+  session.step = "leyendo";
   try {
     const result = await readInePhoto(image);
     session.data = { ...session.data, ...result.fields };
@@ -184,8 +202,47 @@ async function readPhotoAndReview(ctx: Context, session: ChatSession, image: Buf
   }
 }
 
+function photoFileId(ctx: Context): string | undefined {
+  const photos = ctx.message?.photo;
+  if (photos?.length) return photos[photos.length - 1]?.file_id;
+  if (ctx.message?.document?.mime_type?.startsWith("image/")) {
+    return ctx.message.document.file_id;
+  }
+  return undefined;
+}
+
+async function acceptInePhoto(ctx: Context) {
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+  const session = getSession(chatId);
+  if (session.step === "leyendo") return;
+  if (session.step !== "foto" && session.step !== "revision") {
+    await ctx.reply("Primero el celular, luego el correo y al final la foto de la INE. Escribe /hola para empezar.");
+    return;
+  }
+  const fileId = photoFileId(ctx);
+  if (fileId && alreadyReadingFile(fileId)) return;
+  const image = await downloadImage(ctx);
+  if (!image) {
+    await ctx.reply("No pude bajar la foto. Inténtalo otra vez.");
+    return;
+  }
+  session.step = "leyendo";
+  await ctx.reply(
+    hasVisionOcr()
+      ? "Leyendo la INE con el modelo de visión. Espera un momento…"
+      : "Leyendo la credencial INE. Espera un momento…",
+  );
+  void readPhotoAndReview(ctx, session, image);
+}
+
 function createBot(token: string): Bot {
   const bot = new Bot(token);
+
+  bot.use(async (ctx, next) => {
+    if (alreadyHandled(ctx.update.update_id)) return;
+    await next();
+  });
 
   bot.command("start", async (ctx) => {
     const chatId = ctx.chat.id;
@@ -255,6 +312,11 @@ function createBot(token: string): Bot {
       return;
     }
 
+    if (session.step === "leyendo") {
+      await ctx.reply("Todavía estoy leyendo la foto. Espera un momento.");
+      return;
+    }
+
     if (data === "foto") {
       session.step = "foto";
       session.editing = undefined;
@@ -274,32 +336,12 @@ function createBot(token: string): Bot {
   });
 
   bot.on("message:photo", async (ctx) => {
-    const session = getSession(ctx.chat.id);
-    if (session.step !== "foto" && session.step !== "revision") {
-      await ctx.reply("Primero el celular, luego el correo y al final la foto de la INE. Escribe /hola para empezar.");
-      return;
-    }
-    const image = await downloadImage(ctx);
-    if (!image) {
-      await ctx.reply("No pude bajar la foto. Inténtalo otra vez.");
-      return;
-    }
-    await readPhotoAndReview(ctx, session, image);
+    await acceptInePhoto(ctx);
   });
 
   bot.on("message:document", async (ctx) => {
-    const session = getSession(ctx.chat.id);
     if (!ctx.message.document?.mime_type?.startsWith("image/")) return;
-    if (session.step !== "foto" && session.step !== "revision") {
-      await ctx.reply("Primero el celular, luego el correo y al final la foto de la INE. Escribe /hola para empezar.");
-      return;
-    }
-    const image = await downloadImage(ctx);
-    if (!image) {
-      await ctx.reply("No pude bajar la imagen. Inténtalo otra vez.");
-      return;
-    }
-    await readPhotoAndReview(ctx, session, image);
+    await acceptInePhoto(ctx);
   });
 
   bot.on("message:text", async (ctx) => {
@@ -341,6 +383,11 @@ function createBot(token: string): Bot {
       }
       session.data[session.editing] = parsed.value;
       await showReview(ctx, session);
+      return;
+    }
+
+    if (session.step === "leyendo") {
+      await ctx.reply("Todavía estoy leyendo la foto. Espera un momento.");
       return;
     }
 

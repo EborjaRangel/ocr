@@ -1,7 +1,7 @@
 import type { ChatCoyoFields } from "../types";
 import { EMPTY_CHAT_FIELDS } from "../types";
 
-export type ChatStep = "idle" | "celular" | "correo" | "foto" | "revision" | "editando";
+export type ChatStep = "idle" | "celular" | "correo" | "foto" | "leyendo" | "revision" | "editando";
 
 export type EditableField = keyof ChatCoyoFields;
 
