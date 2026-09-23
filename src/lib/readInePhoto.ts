@@ -2,7 +2,6 @@ import {
   alignIneBuffer,
   cropHeaderStrip,
   cropIneZones,
-  enhanceForOcr,
   orientationTurns,
   prepareIneInput,
 } from "./alignServer";
@@ -14,7 +13,7 @@ import { recognizeImageWords, recognizeIneCrops } from "./ocrCrops";
 import { readSeccionFromRegion } from "./readSeccion";
 import type { IneFields } from "./types";
 import { EMPTY_INE_FIELDS } from "./types";
-import { isFourDigitSeccion } from "./validateSeccion";
+import { blockedSeccionFromCurp, isFourDigitSeccion } from "./validateSeccion";
 
 function scoreFields(fields: IneFields): number {
   let score = 0;
@@ -24,20 +23,6 @@ function scoreFields(fields: IneFields): number {
   if (fields.curp.length === 18) score += 5;
   if (isFourDigitSeccion(fields.seccion)) score += 3;
   return score;
-}
-
-function mergeFields(current: IneFields, next: IneFields): IneFields {
-  return {
-    nombre: current.nombre || next.nombre,
-    apellidoPaterno: current.apellidoPaterno || next.apellidoPaterno,
-    apellidoMaterno: current.apellidoMaterno || next.apellidoMaterno,
-    curp: current.curp || next.curp,
-    seccion: isFourDigitSeccion(current.seccion)
-      ? current.seccion
-      : isFourDigitSeccion(next.seccion)
-        ? next.seccion
-        : "",
-  };
 }
 
 async function headerScore(aligned: Buffer): Promise<number> {
@@ -61,31 +46,40 @@ async function uprightCard(prepared: Buffer): Promise<Buffer> {
     }
   }
 
-  return enhanceForOcr(best);
+  return best;
 }
 
 async function readByTemplate(aligned: Buffer): Promise<IneFields> {
   const version = await detectIneVersion(aligned);
   const template = templateFor(version);
   const crops = await cropIneZones(aligned, template);
-  const seccionRead = crops.secciones[0]
-    ? await readSeccionFromRegion(crops.secciones[0])
-    : { value: "", zoneHits: [], otherHits: [] };
-
   const text = await recognizeIneCrops({
     names: crops.names,
     curps: crops.curps,
-    secciones: crops.secciones.slice(1),
+    secciones: [],
     seccionTemplate: crops.secciones[0],
   });
   const parsed = parseIneText(text);
-  const seccion = seccionRead.value || (isFourDigitSeccion(parsed.seccion) ? parsed.seccion : "");
+  const blocked = blockedSeccionFromCurp(parsed.curp);
+
+  let seccion = isFourDigitSeccion(parsed.seccion) && !blocked.has(parsed.seccion)
+    ? parsed.seccion
+    : "";
+
+  if (!seccion && crops.secciones[0]) {
+    const fromZone = await readSeccionFromRegion(crops.secciones[0], blocked);
+    seccion = fromZone.value;
+  }
+  if (!seccion && crops.secciones[1]) {
+    const fromZone = await readSeccionFromRegion(crops.secciones[1], blocked);
+    seccion = fromZone.value;
+  }
 
   console.log("ChatCoyo INE", {
     version,
-    seccion: Boolean(seccion),
     curp: Boolean(parsed.curp),
-    zoneHits: seccionRead.zoneHits.length,
+    names: [parsed.apellidoPaterno, parsed.apellidoMaterno, parsed.nombre].filter(Boolean).length,
+    seccion: Boolean(seccion),
   });
 
   return {
@@ -101,17 +95,7 @@ export async function readInePhoto(input: Buffer): Promise<{
 }> {
   const prepared = await prepareIneInput(input);
   const aligned = await uprightCard(prepared);
-  let fields = await readByTemplate(aligned);
-
-  if (scoreFields(fields) < 8) {
-    const fallbackText = await recognizeIneCrops({
-      full: aligned,
-      names: [],
-      curps: [],
-      secciones: [],
-    });
-    fields = mergeFields(fields, { ...EMPTY_INE_FIELDS, ...parseIneText(fallbackText) });
-  }
+  const fields = await readByTemplate(aligned);
 
   if (!isFourDigitSeccion(fields.seccion)) {
     fields.seccion = "";

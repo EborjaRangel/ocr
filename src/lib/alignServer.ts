@@ -191,10 +191,8 @@ export async function alignIneBuffer(input: Buffer, extraRotate = 0): Promise<Bu
 export async function enhanceForOcr(input: Buffer): Promise<Buffer> {
   return sharp(input)
     .grayscale()
-    .median(3)
     .normalize()
-    .sharpen({ sigma: 1.1 })
-    .linear(1.18, -16)
+    .sharpen({ sigma: 1 })
     .png()
     .toBuffer();
 }
@@ -251,12 +249,11 @@ async function cropZone(aligned: Buffer, zone: IneZone, imageW: number, imageH: 
   let pipeline = sharp(aligned)
     .extract({ left, top, width, height })
     .resize(outW, outH)
-    .grayscale()
-    .median(3)
-    .normalize()
-    .sharpen({ sigma: 0.9 });
+    .grayscale();
+  if (zone.denoise) pipeline = pipeline.median(3);
+  pipeline = pipeline.normalize().sharpen({ sigma: 1 });
   if (zone.contrast) {
-    pipeline = pipeline.linear(1.28, -24);
+    pipeline = pipeline.linear(1.22, -18);
   }
   return pipeline.png().toBuffer();
 }

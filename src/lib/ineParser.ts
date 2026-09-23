@@ -1,5 +1,5 @@
 import { seccionCandidatesInText, tokensCoyoacanEnTexto } from "./coyoacanSeccion";
-import { isFourDigitSeccion } from "./validateSeccion";
+import { blockedSeccionFromCurp, isFourDigitSeccion } from "./validateSeccion";
 import { confirmCurpReads, extractAllValidCurps, prefixesFromPaterno } from "./curp";
 import type { IneFields } from "./types";
 import { EMPTY_INE_FIELDS } from "./types";
@@ -64,6 +64,19 @@ const GARBAGE = new Set([
   "CIC",
   "OCR",
   "INE",
+  "ANDADOR",
+  "AVENIDA",
+  "AV",
+  "CALLEJON",
+  "PRIVADA",
+  "NUMERO",
+  "NUM",
+  "BARRIO",
+  "DELEGACION",
+  "ALCALDIA",
+  "COYOACAN",
+  "CDMX",
+  "CP",
 ]);
 
 function fold(text: string): string {
@@ -315,6 +328,67 @@ function extractLabeledNames(
   return { nombre, apellidoPaterno, apellidoMaterno };
 }
 
+function nameLinesFrom(lines: string[]): Array<{ surname: string; given: string }> {
+  const found: Array<{ surname: string; given: string }> = [];
+  for (const line of lines) {
+    if (isNombreLabel(line) || isCurpLabel(line) || isSeccionLabel(line)) continue;
+    if (isJunkNameLine(line)) continue;
+    if (/APELLIDO|NOMBRE/.test(fold(line)) && nameWords(line).length <= 2) continue;
+    const surname = cleanSurname(line);
+    const given = cleanGivenName(line);
+    if (!surname && !given) continue;
+    found.push({ surname, given });
+  }
+  return found;
+}
+
+function namesMatchingCurp(
+  lines: string[],
+  curp: string,
+): Pick<IneFields, "nombre" | "apellidoPaterno" | "apellidoMaterno"> {
+  const empty = { nombre: "", apellidoPaterno: "", apellidoMaterno: "" };
+  if (!curp || curp.length < 4) return empty;
+  const items = nameLinesFrom(lines);
+  for (let i = 0; i < items.length; i += 1) {
+    for (let j = i + 1; j < items.length; j += 1) {
+      for (let k = j + 1; k < items.length; k += 1) {
+        const candidate = {
+          apellidoPaterno: items[i].surname,
+          apellidoMaterno: items[j].surname,
+          nombre: items[k].given,
+        };
+        if (
+          paternoFitsCurp(candidate.apellidoPaterno, curp) &&
+          maternoFitsCurp(candidate.apellidoMaterno, curp) &&
+          nombreFitsCurp(candidate.nombre, curp)
+        ) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  const used = new Set<string>();
+  const pick = (
+    test: (value: string) => boolean,
+    key: "surname" | "given",
+  ): string => {
+    const hit = items.find((item) => {
+      const value = item[key];
+      return value && test(value) && !used.has(fold(value));
+    });
+    if (!hit) return "";
+    used.add(fold(hit[key]));
+    return hit[key];
+  };
+
+  return {
+    apellidoPaterno: pick((value) => paternoFitsCurp(value, curp), "surname"),
+    apellidoMaterno: pick((value) => maternoFitsCurp(value, curp), "surname"),
+    nombre: pick((value) => nombreFitsCurp(value, curp), "given"),
+  };
+}
+
 function collectNameReads(
   rawText: string,
   lines: string[],
@@ -335,7 +409,9 @@ function collectNameReads(
 function paternoFitsCurp(apellidoPaterno: string, curp: string): boolean {
   if (!apellidoPaterno || curp.length < 2) return false;
   const head = curp.slice(0, 2);
-  return prefixesFromPaterno(apellidoPaterno).some((prefix) => head.startsWith(prefix));
+  return prefixesFromPaterno(apellidoPaterno)
+    .filter((prefix) => prefix.length >= 2)
+    .some((prefix) => prefix === head);
 }
 
 function maternoFitsCurp(apellidoMaterno: string, curp: string): boolean {
@@ -402,16 +478,7 @@ function isDateOrCurpLine(line: string): boolean {
 }
 
 function birthYearFromCurp(curp: string): Set<string> {
-  const blocked = new Set<string>(["1111", "0000"]);
-  if (!curp || curp.length < 10) return blocked;
-  const yy = curp.slice(4, 6);
-  if (/^\d{2}$/.test(yy)) {
-    blocked.add(`19${yy}`);
-    blocked.add(`20${yy}`);
-    const yymm = curp.slice(4, 8);
-    if (/^\d{4}$/.test(yymm) && !yymm.startsWith("0")) blocked.add(yymm);
-  }
-  return blocked;
+  return blockedSeccionFromCurp(curp);
 }
 
 function isAllowedSeccion(value: string, blocked: Set<string>): boolean {
@@ -502,11 +569,13 @@ function collectSeccionReads(raw: string, blocked: Set<string>): {
   };
 
   const template = blockAfter(raw, "===ZONASECCION===");
-  for (const token of seccionFromDigitCrop(template, blocked)) {
-    take(token, immediate, true);
-  }
   take(seccionAfterLabelInRaw(template, blocked), immediate, true);
   take(extractSeccionFromLines(linesOf(template), blocked), immediate, true);
+  if (SECCION_LABEL.test(compact(template))) {
+    for (const token of seccionFromDigitCrop(template, blocked)) {
+      take(token, immediate, true);
+    }
+  }
 
   const fullText = raw.split("===NOMBRES===")[0] ?? raw;
   take(seccionAfterLabelInRaw(fullText, blocked), labeled, true);
@@ -537,33 +606,54 @@ function extractSeccionFromRaw(raw: string, curp: string): string {
   return isFourDigitSeccion(seccion) ? seccion : "";
 }
 
+function curpNameScore(
+  value: Pick<IneFields, "nombre" | "apellidoPaterno" | "apellidoMaterno">,
+  curp: string,
+): number {
+  if (!curp) return scoreNames(value);
+  return (
+    (paternoFitsCurp(value.apellidoPaterno, curp) ? 5 : 0) +
+    (maternoFitsCurp(value.apellidoMaterno, curp) ? 3 : 0) +
+    (nombreFitsCurp(value.nombre, curp) ? 3 : 0)
+  );
+}
+
 export function parseIneText(rawText: string): IneFields {
   const lines = linesOf(rawText);
+  const curp = extractCurp(rawText, lines, "");
   const nameReads = collectNameReads(rawText, lines);
-  const names = confirmNameReads(nameReads);
-  const curp = extractCurp(rawText, lines, names.apellidoPaterno);
-  if (curp && !paternoFitsCurp(names.apellidoPaterno, curp)) {
-    const matching = nameReads.find((item) => paternoFitsCurp(item.apellidoPaterno, curp));
-    if (matching?.apellidoPaterno) names.apellidoPaterno = matching.apellidoPaterno;
+  const fromCurp = namesMatchingCurp(
+    [
+      ...lines,
+      ...numberedBlocks(rawText, "NOMBRES", 2).flatMap((block) => linesOf(block)),
+    ],
+    curp,
+  );
+  const ranked = [...nameReads, fromCurp]
+    .filter((item) => scoreNames(item) > 0 || curpNameScore(item, curp) > 0)
+    .sort((a, b) => curpNameScore(b, curp) - curpNameScore(a, curp) || scoreNames(b) - scoreNames(a));
+  const names = ranked[0]
+    ? {
+        apellidoPaterno:
+          fromCurp.apellidoPaterno || ranked[0].apellidoPaterno,
+        apellidoMaterno:
+          fromCurp.apellidoMaterno || ranked[0].apellidoMaterno,
+        nombre: fromCurp.nombre || ranked[0].nombre,
+      }
+    : confirmNameReads(nameReads);
+
+  if (curp) {
+    if (!paternoFitsCurp(names.apellidoPaterno, curp)) {
+      names.apellidoPaterno = fromCurp.apellidoPaterno;
+    }
+    if (!maternoFitsCurp(names.apellidoMaterno, curp)) {
+      names.apellidoMaterno = fromCurp.apellidoMaterno;
+    }
+    if (!nombreFitsCurp(names.nombre, curp)) {
+      names.nombre = fromCurp.nombre;
+    }
   }
-  if (curp && !maternoFitsCurp(names.apellidoMaterno, curp)) {
-    const matching = nameReads.find((item) => maternoFitsCurp(item.apellidoMaterno, curp));
-    if (matching?.apellidoMaterno) names.apellidoMaterno = matching.apellidoMaterno;
-  }
-  if (
-    sameName(names.nombre, names.apellidoPaterno) ||
-    sameName(names.nombre, names.apellidoMaterno) ||
-    (curp && names.nombre && !nombreFitsCurp(names.nombre, curp))
-  ) {
-    const matching = nameReads.find(
-      (item) =>
-        item.nombre &&
-        !sameName(item.nombre, names.apellidoPaterno) &&
-        !sameName(item.nombre, names.apellidoMaterno) &&
-        (!curp || nombreFitsCurp(item.nombre, curp)),
-    );
-    names.nombre = matching?.nombre ?? "";
-  }
+
   return {
     ...EMPTY_INE_FIELDS,
     ...names,

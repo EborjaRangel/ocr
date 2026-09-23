@@ -90,7 +90,7 @@ export async function detectIneVersion(aligned: Buffer, hintText = ""): Promise<
   if (/CIC|APELLIDO PATERNO|APELLIDO MATERNO/.test(text)) cic += 4;
   if (/CLAVE DE ELECTOR/.test(text) && !/CIC/.test(text)) classic += 2;
 
-  if (cic >= 3 && cic >= classic) return "cic";
+  if (qr >= 4 && cic >= classic) return "cic";
   if (classic >= 2) return "c";
   return "d";
 }

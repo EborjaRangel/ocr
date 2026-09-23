@@ -21,3 +21,19 @@ export function pickPreferredSeccion(expectedZone: string[], others: string[]): 
   if (zoneHit) return zoneHit;
   return others.find(isFourDigitSeccion) ?? "";
 }
+
+export function blockedSeccionFromCurp(curp: string): Set<string> {
+  const blocked = new Set<string>(["1111", "0000"]);
+  if (!curp || curp.length < 10) return blocked;
+  const yy = curp.slice(4, 6);
+  if (/^\d{2}$/.test(yy)) {
+    blocked.add(`19${yy}`);
+    blocked.add(`20${yy}`);
+  }
+  const date = curp.slice(4, 10);
+  for (let i = 0; i <= date.length - 4; i += 1) {
+    const four = date.slice(i, i + 4);
+    if (/^\d{4}$/.test(four)) blocked.add(four);
+  }
+  return blocked;
+}
