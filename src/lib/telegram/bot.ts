@@ -4,6 +4,12 @@ import { readInePhoto } from "../readInePhoto";
 import { hasVisionOcr } from "../visionIne";
 import type { ChatCoyoFields } from "../types";
 import {
+  AXIS_HOLA_CAPTION,
+  AXIS_HOLA_SHORT_CAPTION,
+  AXIS_START_CAPTION,
+  axisLogoFile,
+} from "./brand";
+import {
   CELULAR_REGEX,
   CORREO_REGEX,
   CLAVE_ELECTOR_REGEX,
@@ -281,17 +287,13 @@ function createBot(token: string): Bot {
   bot.command("start", async (ctx) => {
     const chatId = ctx.chat.id;
     startRegistro(chatId);
-    await ctx.reply(
-      "Hola, soy ChatCoyo. Voy a pedirte celular, correo y una foto de tu INE (puede ser vertical u horizontal).\n\nSi quieres cancelar, escribe /salir.\n\n¿Cuál es tu celular a 10 dígitos?",
-    );
+    await ctx.replyWithPhoto(axisLogoFile(), { caption: AXIS_START_CAPTION });
   });
 
   bot.command("hola", async (ctx) => {
     const chatId = ctx.chat.id;
     startRegistro(chatId);
-    await ctx.reply(
-      "Hola, soy ChatCoyo. La foto de la INE puede ir vertical u horizontal.\nSi quieres cancelar, escribe /salir.\n\n¿Cuál es tu celular a 10 dígitos?",
-    );
+    await ctx.replyWithPhoto(axisLogoFile(), { caption: AXIS_HOLA_CAPTION });
   });
 
   bot.command("salir", async (ctx) => {
@@ -305,9 +307,7 @@ function createBot(token: string): Bot {
   bot.hears(/^(hola)$/i, async (ctx) => {
     const chatId = ctx.chat.id;
     startRegistro(chatId);
-    await ctx.reply(
-      "Hola, soy ChatCoyo. ¿Cuál es tu celular a 10 dígitos?",
-    );
+    await ctx.replyWithPhoto(axisLogoFile(), { caption: AXIS_HOLA_SHORT_CAPTION });
   });
 
   bot.hears(/^(salir|cancelar)$/i, async (ctx) => {
