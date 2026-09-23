@@ -46,6 +46,7 @@ export function RegistrosTable({ registros, loading }: RegistrosTableProps) {
             <th className="px-3 py-3 font-semibold">Apellido paterno</th>
             <th className="px-3 py-3 font-semibold">Apellido materno</th>
             <th className="px-3 py-3 font-semibold">CURP</th>
+            <th className="px-3 py-3 font-semibold">Clave elector</th>
             <th className="px-3 py-3 font-semibold">Sección</th>
           </tr>
         </thead>
@@ -72,6 +73,9 @@ export function RegistrosTable({ registros, loading }: RegistrosTableProps) {
               </td>
               <td className="px-3 py-3 font-mono text-xs text-stone-800">
                 {registro.curp}
+              </td>
+              <td className="px-3 py-3 font-mono text-xs text-stone-800">
+                {registro.claveElector || "—"}
               </td>
               <td className="px-3 py-3">
                 <span className="inline-flex min-w-16 items-center justify-center rounded-lg bg-[#F6E8C3] px-2 py-1 font-mono text-sm font-bold tracking-widest text-stone-900">

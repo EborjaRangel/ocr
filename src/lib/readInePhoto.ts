@@ -21,6 +21,7 @@ function scoreFields(fields: IneFields): number {
   if (fields.apellidoMaterno.length >= 2) score += 2;
   if (fields.nombre.length >= 2) score += 2;
   if (fields.curp.length === 18) score += 5;
+  if (fields.claveElector.length === 18) score += 4;
   if (isFourDigitSeccion(fields.seccion)) score += 3;
   return score;
 }
@@ -56,6 +57,7 @@ async function readByTemplate(aligned: Buffer): Promise<IneFields> {
   const text = await recognizeIneCrops({
     names: crops.names,
     curps: crops.curps,
+    claves: crops.claves,
     secciones: [],
     seccionTemplate: crops.secciones[0],
   });
@@ -78,6 +80,7 @@ async function readByTemplate(aligned: Buffer): Promise<IneFields> {
   console.log("ChatCoyo INE", {
     version,
     curp: Boolean(parsed.curp),
+    clave: Boolean(parsed.claveElector),
     names: [parsed.apellidoPaterno, parsed.apellidoMaterno, parsed.nombre].filter(Boolean).length,
     seccion: Boolean(seccion),
   });

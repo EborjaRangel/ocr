@@ -20,6 +20,11 @@ export const CURP_ZONES: IneZone[] = [
   { left: 0.26, top: 0.44, right: 0.76, bottom: 0.66, scale: 1.8, contrast: true },
 ];
 
+export const CLAVE_ZONES: IneZone[] = [
+  { left: 0.2, top: 0.5, right: 0.78, bottom: 0.84, scale: 1.55, denoise: true },
+  { left: 0.24, top: 0.56, right: 0.72, bottom: 0.8, scale: 1.8, contrast: true },
+];
+
 export const SECCION_ZONES: IneZone[] = [
   { left: 0.58, top: 0.42, right: 0.995, bottom: 0.9, scale: 1.55, denoise: true, contrast: true },
   { left: 0.7, top: 0.5, right: 0.995, bottom: 0.84, scale: 1.85, contrast: true },

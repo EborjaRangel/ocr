@@ -430,6 +430,13 @@ export function IneReader({ initialRegistros }: IneReaderProps) {
                   uppercase
                 />
                 <FormField
+                  name="claveElector"
+                  label="Clave de elector"
+                  placeholder="GARCJL85021409H200"
+                  maxLength={18}
+                  uppercase
+                />
+                <FormField
                   name="seccion"
                   label="Sección"
                   placeholder="0000"

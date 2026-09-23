@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import type { IneTemplate } from "./ineTemplates";
-import { CURP_ZONES, NAME_ZONES, SECCION_ZONES, type IneZone } from "./ineZones";
+import { CLAVE_ZONES, CURP_ZONES, NAME_ZONES, SECCION_ZONES, type IneZone } from "./ineZones";
 
 const INE_WIDTH = 1600;
 const INE_HEIGHT = 1010;
@@ -264,6 +264,7 @@ export async function cropIneZones(
 ): Promise<{
   names: Buffer[];
   curps: Buffer[];
+  claves: Buffer[];
   secciones: Buffer[];
 }> {
   const meta = await sharp(aligned).metadata();
@@ -271,11 +272,13 @@ export async function cropIneZones(
   const imageH = meta.height ?? INE_HEIGHT;
   const namesZones = template?.names ?? NAME_ZONES;
   const curpZones = template?.curps ?? CURP_ZONES;
+  const claveZones = template?.claves ?? CLAVE_ZONES;
   const seccionZones = template?.secciones ?? SECCION_ZONES;
-  const [names, curps, secciones] = await Promise.all([
+  const [names, curps, claves, secciones] = await Promise.all([
     Promise.all(namesZones.map((zone) => cropZone(aligned, zone, imageW, imageH))),
     Promise.all(curpZones.map((zone) => cropZone(aligned, zone, imageW, imageH))),
+    Promise.all(claveZones.map((zone) => cropZone(aligned, zone, imageW, imageH))),
     Promise.all(seccionZones.map((zone) => cropZone(aligned, zone, imageW, imageH))),
   ]);
-  return { names, curps, secciones };
+  return { names, curps, claves, secciones };
 }

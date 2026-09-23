@@ -45,6 +45,7 @@ export async function recognizeIneCrops(crops: {
   full?: Buffer;
   names: Buffer[];
   curps: Buffer[];
+  claves?: Buffer[];
   secciones: Buffer[];
   seccionTemplate?: Buffer;
 }): Promise<string> {
@@ -65,6 +66,13 @@ export async function recognizeIneCrops(crops: {
       parts.push(i === 0 ? "===CURP===" : `===CURP${i + 1}===`);
       parts.push("CURP");
       parts.push(await recognize(worker, crops.curps[i], PSM.SINGLE_LINE, "0"));
+    }
+
+    const claves = crops.claves ?? [];
+    for (let i = 0; i < claves.length; i += 1) {
+      parts.push(i === 0 ? "===CLAVE===" : `===CLAVE${i + 1}===`);
+      parts.push("CLAVE DE ELECTOR");
+      parts.push(await recognize(worker, claves[i], PSM.SINGLE_LINE, "0"));
     }
 
     if (crops.seccionTemplate) {

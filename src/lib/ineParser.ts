@@ -1,5 +1,6 @@
 import { seccionCandidatesInText, tokensCoyoacanEnTexto } from "./coyoacanSeccion";
 import { blockedSeccionFromCurp, isFourDigitSeccion } from "./validateSeccion";
+import { confirmClaveReads, extractAllValidClaves } from "./claveElector";
 import { confirmCurpReads, extractAllValidCurps, prefixesFromPaterno } from "./curp";
 import type { IneFields } from "./types";
 import { EMPTY_INE_FIELDS } from "./types";
@@ -654,10 +655,17 @@ export function parseIneText(rawText: string): IneFields {
     }
   }
 
+  const claveBlocks = [...numberedBlocks(rawText, "CLAVE", 2), rawText];
+  const claveElector = confirmClaveReads(
+    claveBlocks.flatMap((block) => extractAllValidClaves(block, curp)),
+    curp,
+  );
+
   return {
     ...EMPTY_INE_FIELDS,
     ...names,
     curp,
+    claveElector,
     seccion: extractSeccionFromRaw(rawText, curp),
   };
 }
@@ -669,5 +677,5 @@ export function missingIneFields(fields: IneFields): Array<keyof IneFields> {
 }
 
 export function hasAnyIneData(fields: IneFields): boolean {
-  return missingIneFields(fields).length < 5;
+  return missingIneFields(fields).length < 6;
 }

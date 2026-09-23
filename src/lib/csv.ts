@@ -16,6 +16,7 @@ const HEADERS = [
   "apellidoPaterno",
   "apellidoMaterno",
   "curp",
+  "claveElector",
   "seccion",
 ] as const;
 
@@ -67,6 +68,7 @@ function normalizeRecord(fields: IneFields & Partial<ChatCoyoFields>): IneRecord
     apellidoPaterno: fields.apellidoPaterno.trim().toUpperCase(),
     apellidoMaterno: fields.apellidoMaterno.trim().toUpperCase(),
     curp: fields.curp.trim().toUpperCase(),
+    claveElector: (fields.claveElector ?? "").trim().toUpperCase().replace(/\s/g, ""),
     seccion: fields.seccion.trim().padStart(4, "0").slice(-4),
   };
 }
@@ -84,6 +86,7 @@ function rowFromCols(header: string[], cols: string[]): IneRecord {
     apellidoPaterno: get("apellidoPaterno", 2),
     apellidoMaterno: get("apellidoMaterno", 3),
     curp: get("curp", 4),
+    claveElector: get("claveElector", -1),
     seccion: get("seccion", 5),
   };
 }
@@ -107,6 +110,7 @@ async function migrateCsv(content: string): Promise<string | null> {
         record.apellidoPaterno,
         record.apellidoMaterno,
         record.curp,
+        record.claveElector,
         record.seccion,
       ]
         .map(escapeCsv)
@@ -142,6 +146,7 @@ export async function appendRegistro(
       record.apellidoPaterno,
       record.apellidoMaterno,
       record.curp,
+      record.claveElector,
       record.seccion,
     ]
       .map(escapeCsv)

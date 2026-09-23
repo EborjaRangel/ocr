@@ -5,6 +5,7 @@ import type { ChatCoyoFields } from "../types";
 import {
   CELULAR_REGEX,
   CORREO_REGEX,
+  CLAVE_ELECTOR_REGEX,
   CURP_REGEX,
   NAME_REGEX,
   chatCoyoSchema,
@@ -24,6 +25,7 @@ const FIELD_LABELS: Record<EditableField, string> = {
   apellidoPaterno: "Apellido paterno",
   apellidoMaterno: "Apellido materno",
   curp: "CURP",
+  claveElector: "Clave de elector",
   seccion: "Sección",
 };
 
@@ -34,6 +36,7 @@ const FIELD_HINTS: Record<EditableField, string> = {
   apellidoPaterno: "Escribe el apellido paterno.",
   apellidoMaterno: "Escribe el apellido materno.",
   curp: "Escribe el CURP de 18 caracteres.",
+  claveElector: "Escribe la clave de elector de 18 caracteres.",
   seccion: "Escribe la sección (0 + 3 dígitos, o 5515).",
 };
 
@@ -56,6 +59,7 @@ function reviewKeyboard() {
     .text("Materno", "e:apellidoMaterno")
     .text("CURP", "e:curp")
     .row()
+    .text("Clave elector", "e:claveElector")
     .text("Sección", "e:seccion")
     .text("Otra foto INE", "foto")
     .row()
@@ -72,6 +76,7 @@ function summaryText(data: ChatCoyoFields): string {
     `Paterno: ${show(data.apellidoPaterno)}`,
     `Materno: ${show(data.apellidoMaterno)}`,
     `CURP: ${show(data.curp)}`,
+    `Clave de elector: ${show(data.claveElector)}`,
     `Sección: ${show(data.seccion)}`,
     "",
     "Si un dato no se leyó o está mal, toca su botón. Si todo está bien, toca Sí, guardar.",
@@ -115,6 +120,13 @@ function normalizeField(field: EditableField, raw: string): { value: string; err
       return { value: curp, error: "El CURP debe tener 18 caracteres y un formato válido." };
     }
     return { value: curp };
+  }
+  if (field === "claveElector") {
+    const clave = value.toUpperCase().replace(/\s/g, "");
+    if (!CLAVE_ELECTOR_REGEX.test(clave) && !/^[A-Z]{6}\d{8}[A-Z]\d{3}$/.test(clave)) {
+      return { value: clave, error: "La clave de elector debe tener 18 caracteres y un formato válido." };
+    }
+    return { value: clave };
   }
   if (field === "seccion") {
     const seccion = value.replace(/\D/g, "").padStart(4, "0").slice(-4);

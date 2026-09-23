@@ -32,6 +32,16 @@ export async function POST(request: Request) {
       )
     ).filter((item): item is Buffer => Boolean(item));
 
+    const claves = (
+      await Promise.all(
+        [1, 2].map((index) =>
+          fileToBuffer(
+            form.get(`clave${index}`) ?? (index === 1 ? form.get("clave") : null),
+          ),
+        ),
+      )
+    ).filter((item): item is Buffer => Boolean(item));
+
     const secciones = (
       await Promise.all(
         [1, 2].map((index) =>
@@ -42,11 +52,11 @@ export async function POST(request: Request) {
       )
     ).filter((item): item is Buffer => Boolean(item));
 
-    if (names.length + curps.length + secciones.length === 0) {
+    if (names.length + curps.length + claves.length + secciones.length === 0) {
       return NextResponse.json({ error: "Faltan los recortes" }, { status: 400 });
     }
 
-    const text = await recognizeIneCrops({ names, curps, secciones });
+    const text = await recognizeIneCrops({ names, curps, claves, secciones });
     return NextResponse.json({ text });
   } catch (error) {
     const message =

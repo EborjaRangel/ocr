@@ -3,6 +3,7 @@ export type IneFields = {
   apellidoPaterno: string;
   apellidoMaterno: string;
   curp: string;
+  claveElector: string;
   seccion: string;
 };
 
@@ -20,6 +21,7 @@ export const EMPTY_INE_FIELDS: IneFields = {
   apellidoPaterno: "",
   apellidoMaterno: "",
   curp: "",
+  claveElector: "",
   seccion: "",
 };
 
