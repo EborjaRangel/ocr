@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Update } from "grammy/types";
-import { getChatCoyoBot } from "@/lib/telegram/bot";
+import { getReadyChatCoyoBot } from "@/lib/telegram/bot";
 import { setAxisBotIdentity } from "@/lib/telegram/brand";
 
 export const runtime = "nodejs";
@@ -14,8 +14,8 @@ export async function POST(request: Request) {
     );
   }
   const update = (await request.json()) as Update;
-  void getChatCoyoBot()
-    .handleUpdate(update)
+  void getReadyChatCoyoBot()
+    .then((bot) => bot.handleUpdate(update))
     .catch((error) => console.error("ChatCoyo webhook", error));
   return NextResponse.json({ ok: true });
 }

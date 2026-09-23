@@ -47,6 +47,7 @@ const FIELD_HINTS: Record<EditableField, string> = {
 };
 
 let botInstance: Bot | null = null;
+let botReady: Promise<Bot> | null = null;
 const seenUpdates = new Map<number, number>();
 const seenFiles = new Map<string, number>();
 
@@ -298,7 +299,7 @@ function createBot(token: string): Bot {
     await exitChat(ctx, ctx.chat.id);
   });
 
-  bot.hears(/^(hola)$/i, async (ctx) => {
+  bot.hears(/^\s*hola\s*$/i, async (ctx) => {
     await beginChat(ctx, AXIS_HOLA_SHORT_CAPTION);
   });
 
@@ -376,7 +377,14 @@ function createBot(token: string): Bot {
 
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text.trim();
-    if (/^\/?(hola|start|salir|cancelar)$/i.test(text)) return;
+    if (/^\/?(hola|start)(?:@\w+)?$/i.test(text)) {
+      await beginChat(ctx, AXIS_HOLA_CAPTION);
+      return;
+    }
+    if (/^\/?(salir|cancelar)(?:@\w+)?$/i.test(text)) {
+      await exitChat(ctx, ctx.chat.id);
+      return;
+    }
     const session = getSession(ctx.chat.id);
 
     if (session.step === "celular") {
@@ -450,4 +458,17 @@ export function getChatCoyoBot(): Bot {
     botInstance = createBot(token);
   }
   return botInstance;
+}
+
+export function getReadyChatCoyoBot(): Promise<Bot> {
+  if (!botReady) {
+    const bot = getChatCoyoBot();
+    botReady = (bot.isInited() ? Promise.resolve() : bot.init())
+      .then(() => bot)
+      .catch((error) => {
+        botReady = null;
+        throw error;
+      });
+  }
+  return botReady;
 }
