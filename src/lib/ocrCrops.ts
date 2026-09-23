@@ -1,7 +1,11 @@
 import { PSM } from "tesseract.js";
 import { withOcrWorker } from "./tesseractServer";
 
+const LETTERS =
+  "ABCDEFGHIJKLMNÑOPQRSTUVWXYZabcdefghijklmnñopqrstuvwxyzÁÉÍÓÚÜáéíóúü0123456789 ";
+
 export async function recognizeIneCrops(crops: {
+  full?: Buffer;
   names: Buffer[];
   curps: Buffer[];
   secciones: Buffer[];
@@ -9,9 +13,19 @@ export async function recognizeIneCrops(crops: {
   return withOcrWorker(async (worker) => {
     const parts: string[] = [];
 
+    if (crops.full) {
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+        tessedit_char_whitelist: LETTERS,
+        preserve_interword_spaces: "1",
+      });
+      parts.push((await worker.recognize(crops.full)).data.text ?? "");
+    }
+
     for (let i = 0; i < crops.names.length; i += 1) {
       await worker.setParameters({
         tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+        tessedit_char_whitelist: LETTERS,
         preserve_interword_spaces: "1",
       });
       parts.push(i === 0 ? "===NOMBRES===" : `===NOMBRES${i + 1}===`);
